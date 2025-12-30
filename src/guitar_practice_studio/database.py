@@ -1,7 +1,7 @@
 """
 Database models and operations for Guitar Practice Studio
 """
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from typing import Optional, List
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Date, Float, ForeignKey, Boolean
 from sqlalchemy.orm import declarative_base, sessionmaker, relationship
@@ -171,6 +171,34 @@ class RepertoirePiece(Base):
     
     def __repr__(self):
         return f"<RepertoirePiece {self.id}: {self.title}>"
+
+
+class ManualPractice(Base):
+    """Manual practice entry for offline/unrecorded practice"""
+    __tablename__ = "manual_practice"
+    
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, nullable=False, default=date.today)
+    category = Column(String(50))
+    duration_minutes = Column(Integer, default=0)
+    description = Column(Text)
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def __repr__(self):
+        return f"<ManualPractice {self.id}: {self.date} - {self.category}>"
+
+
+class DailyJournal(Base):
+    """Daily practice journal notes"""
+    __tablename__ = "daily_journal"
+    
+    id = Column(Integer, primary_key=True)
+    date = Column(Date, nullable=False, unique=True)
+    notes = Column(Text)
+    updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
+    
+    def __repr__(self):
+        return f"<DailyJournal {self.date}>"
 
 
 # Database operations
@@ -715,3 +743,174 @@ def delete_repertoire_piece(piece_id: int):
         db.delete(piece)
         db.commit()
     db.close()
+
+
+# ============================================================================
+# JOURNAL FUNCTIONS
+# ============================================================================
+
+def get_daily_summary(target_date: date) -> dict:
+    """Get a complete summary of practice for a specific date"""
+    db = get_session()
+    
+    # Get completed exercises from planner
+    day_of_week = target_date.weekday()
+    # Find the plan for the week containing target_date
+    week_start = target_date - timedelta(days=day_of_week)
+    
+    plan = db.query(WeeklyPlan).filter(
+        WeeklyPlan.week_start == week_start
+    ).first()
+    
+    completed_exercises = []
+    if plan:
+        entries = db.query(WeeklyPlanEntry).filter(
+            WeeklyPlanEntry.plan_id == plan.id,
+            WeeklyPlanEntry.day_of_week == day_of_week,
+            WeeklyPlanEntry.completed == True
+        ).all()
+        
+        for entry in entries:
+            exercise = db.query(Exercise).get(entry.exercise_id)
+            if exercise:
+                completed_exercises.append({
+                    "name": exercise.name,
+                    "category": exercise.category,
+                    "duration": entry.duration_minutes or exercise.default_duration_minutes,
+                    "completed_at": entry.completed_at
+                })
+    
+    # Get recordings from PracticeSession
+    recordings = db.query(PracticeSession).filter(
+        PracticeSession.date == target_date
+    ).all()
+    
+    recording_list = [{
+        "id": r.id,
+        "title": r.title,
+        "category": r.category,
+        "duration": r.duration_minutes,
+        "has_recording": r.has_recording,
+        "has_video": r.has_video,
+        "recording_filename": r.recording_filename,
+        "rating": r.rating,
+        "notes": r.notes
+    } for r in recordings]
+    
+    # Get manual practice entries
+    manual_entries = db.query(ManualPractice).filter(
+        ManualPractice.date == target_date
+    ).all()
+    
+    manual_list = [{
+        "id": m.id,
+        "category": m.category,
+        "duration": m.duration_minutes,
+        "description": m.description
+    } for m in manual_entries]
+    
+    # Get daily journal notes
+    journal = db.query(DailyJournal).filter(
+        DailyJournal.date == target_date
+    ).first()
+    
+    db.close()
+    
+    # Calculate totals by category
+    category_totals = {}
+    for ex in completed_exercises:
+        cat = ex["category"]
+        category_totals[cat] = category_totals.get(cat, 0) + ex["duration"]
+    for m in manual_list:
+        cat = m["category"] or "Other"
+        category_totals[cat] = category_totals.get(cat, 0) + m["duration"]
+    for r in recording_list:
+        if r["duration"]:
+            cat = r["category"] or "Other"
+            category_totals[cat] = category_totals.get(cat, 0) + r["duration"]
+    
+    total_minutes = sum(category_totals.values())
+    
+    return {
+        "date": target_date,
+        "completed_exercises": completed_exercises,
+        "recordings": recording_list,
+        "manual_entries": manual_list,
+        "journal_notes": journal.notes if journal else "",
+        "category_totals": category_totals,
+        "total_minutes": total_minutes
+    }
+
+
+def get_week_summary(week_start: date) -> List[dict]:
+    """Get daily totals for a week (Mon-Sun)"""
+    summaries = []
+    for i in range(7):
+        day = week_start + timedelta(days=i)
+        summary = get_daily_summary(day)
+        summaries.append({
+            "date": day,
+            "total_minutes": summary["total_minutes"],
+            "has_practice": summary["total_minutes"] > 0
+        })
+    return summaries
+
+
+def save_daily_notes(target_date: date, notes: str):
+    """Save or update daily journal notes"""
+    db = get_session()
+    journal = db.query(DailyJournal).filter(
+        DailyJournal.date == target_date
+    ).first()
+    
+    if journal:
+        journal.notes = notes
+        journal.updated_at = datetime.now()
+    else:
+        journal = DailyJournal(date=target_date, notes=notes)
+        db.add(journal)
+    
+    db.commit()
+    db.close()
+
+
+def add_manual_practice(target_date: date, category: str, duration_minutes: int, description: str = "") -> int:
+    """Add a manual practice entry"""
+    db = get_session()
+    entry = ManualPractice(
+        date=target_date,
+        category=category,
+        duration_minutes=duration_minutes,
+        description=description
+    )
+    db.add(entry)
+    db.commit()
+    entry_id = entry.id
+    db.close()
+    return entry_id
+
+
+def update_manual_practice(entry_id: int, category: str = None, duration_minutes: int = None, description: str = None):
+    """Update a manual practice entry"""
+    db = get_session()
+    entry = db.query(ManualPractice).get(entry_id)
+    if entry:
+        if category is not None:
+            entry.category = category
+        if duration_minutes is not None:
+            entry.duration_minutes = duration_minutes
+        if description is not None:
+            entry.description = description
+        db.commit()
+    db.close()
+
+
+def delete_manual_practice(entry_id: int):
+    """Delete a manual practice entry"""
+    db = get_session()
+    entry = db.query(ManualPractice).get(entry_id)
+    if entry:
+        db.delete(entry)
+        db.commit()
+    db.close()
+

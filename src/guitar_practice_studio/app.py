@@ -27,6 +27,8 @@ from .database import (
     get_category_targets, get_week_category_totals,
     reorder_today_entry, remove_today_entry,
     get_all_repertoire, get_active_repertoire, add_repertoire_piece, update_repertoire_piece, delete_repertoire_piece,
+    get_daily_summary, get_week_summary, save_daily_notes,
+    add_manual_practice, update_manual_practice, delete_manual_practice,
     PRACTICE_CATEGORIES, PIECE_TYPES, PIECE_STATUSES
 )
 from .recorder import Recorder, PlaybackController, AUDIO_AVAILABLE, VIDEO_AVAILABLE
@@ -823,70 +825,250 @@ def create_record_page():
 
 
 def create_journal_page():
-    """Practice journal with session history"""
+    """Practice journal with weekly overview and daily details"""
+    today = date.today()
+    # Get current week (Monday start)
+    week_start = today - timedelta(days=today.weekday())
+    
     return dbc.Container([
         html.H3("Practice Journal", className="mb-4"),
         
-        dbc.Row([
-            dbc.Col([
-                # Filters
-                dbc.Card([
-                    dbc.CardBody([
-                        dbc.Row([
-                            dbc.Col([
-                                dbc.Label("Date Range"),
-                                dcc.DatePickerRange(
-                                    id="journal-date-range",
-                                    start_date=(date.today() - timedelta(days=30)),
-                                    end_date=date.today(),
-                                    display_format="MMM D, YYYY"
-                                ),
-                            ], md=6),
-                            dbc.Col([
-                                dbc.Label("Category"),
-                                dcc.Dropdown(
-                                    id="journal-category-filter",
-                                    options=[{"label": "All", "value": "all"}] + 
-                                            [{"label": c, "value": c} for c in PRACTICE_CATEGORIES],
-                                    value="all"
-                                ),
-                            ], md=4),
-                            dbc.Col([
-                                dbc.Label(" "),
-                                dbc.Button("🔄 Refresh", id="btn-refresh-journal", className="d-block"),
-                            ], md=2),
-                        ]),
-                    ])
-                ], className="mb-4"),
+        # Week selector and overview
+        dbc.Card([
+            dbc.CardBody([
+                # Week navigation
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Button("← Prev", id="journal-prev-week", size="sm", color="secondary"),
+                    ], width="auto"),
+                    dbc.Col([
+                        html.H5(id="journal-week-label", className="text-center mb-0"),
+                    ]),
+                    dbc.Col([
+                        dbc.Button("Next →", id="journal-next-week", size="sm", color="secondary"),
+                    ], width="auto"),
+                ], className="mb-3 align-items-center"),
                 
-                # Sessions list
-                html.Div(id="journal-sessions-list"),
-            ], lg=8),
-            
-            dbc.Col([
-                # Add manual entry
-                dbc.Card([
-                    dbc.CardHeader("Log Practice (No Recording)"),
-                    dbc.CardBody([
-                        dbc.Label("Title"),
-                        dbc.Input(id="manual-title", placeholder="What did you practice?", className="mb-2"),
-                        dbc.Label("Category"),
-                        dcc.Dropdown(
-                            id="manual-category",
-                            options=[{"label": c, "value": c} for c in PRACTICE_CATEGORIES],
-                            className="mb-2"
-                        ),
-                        dbc.Label("Duration (minutes)"),
-                        dbc.Input(id="manual-duration", type="number", min=1, className="mb-2"),
-                        dbc.Label("Notes"),
-                        dbc.Textarea(id="manual-notes", className="mb-2"),
-                        dbc.Button("Add Entry", id="btn-add-manual", color="primary"),
-                        html.Div(id="manual-status", className="mt-2"),
-                    ])
-                ])
-            ], lg=4),
-        ])
+                # Week overview - clickable days
+                html.Div(id="journal-week-overview"),
+            ])
+        ], className="mb-4"),
+        
+        # Selected day details
+        html.Div(id="journal-day-details"),
+        
+        # Store for selected date and week
+        dcc.Store(id="journal-selected-date", data=today.isoformat()),
+        dcc.Store(id="journal-week-start", data=week_start.isoformat()),
     ])
+
+
+def _build_week_overview(week_start: date, selected_date: date) -> html.Div:
+    """Build the week overview row with clickable days"""
+    from .database import get_week_summary
+    
+    week_summary = get_week_summary(week_start)
+    day_buttons = []
+    
+    for i, day_data in enumerate(week_summary):
+        day = day_data["date"]
+        mins = day_data["total_minutes"]
+        is_selected = day == selected_date
+        is_today = day == date.today()
+        is_future = day > date.today()
+        
+        # Determine style
+        if is_selected:
+            color = "primary"
+            outline = False
+        elif is_future:
+            color = "secondary"
+            outline = True
+        elif mins > 0:
+            color = "success"
+            outline = True
+        else:
+            color = "secondary"
+            outline = True
+        
+        day_btn = dbc.Col([
+            dbc.Button(
+                html.Div([
+                    html.Div(DAY_NAMES[i][:3], style={"fontWeight": "bold"}),
+                    html.Div(day.strftime("%d"), style={"fontSize": "1.2em"}),
+                    html.Div(f"{mins}m" if mins > 0 else "—", 
+                            style={"fontSize": "0.8em"}, 
+                            className="text-muted" if outline else ""),
+                ]),
+                id={"type": "journal-day-btn", "date": day.isoformat()},
+                color=color,
+                outline=outline,
+                className="w-100 py-2" + (" border-warning border-2" if is_today else ""),
+                disabled=is_future
+            )
+        ], className="px-1")
+        day_buttons.append(day_btn)
+    
+    return dbc.Row(day_buttons, className="g-1")
+
+
+def _build_day_details(target_date: date) -> html.Div:
+    """Build the detailed view for a specific day"""
+    from .database import get_daily_summary
+    
+    summary = get_daily_summary(target_date)
+    is_today = target_date == date.today()
+    is_future = target_date > date.today()
+    
+    if is_future:
+        return dbc.Alert("Select a past or current day to view practice details.", color="info")
+    
+    # Group completed exercises by category
+    exercises_by_cat = {}
+    for ex in summary["completed_exercises"]:
+        cat = ex["category"]
+        if cat not in exercises_by_cat:
+            exercises_by_cat[cat] = []
+        exercises_by_cat[cat].append(ex)
+    
+    # Build sections
+    sections = []
+    
+    # Header with date and total
+    date_str = target_date.strftime("%A, %B %d, %Y")
+    header = dbc.Row([
+        dbc.Col([
+            html.H5(date_str, className="mb-0"),
+            html.Small("Today" if is_today else "", className="text-muted"),
+        ]),
+        dbc.Col([
+            dbc.Badge(f"Total: {summary['total_minutes']} min", 
+                     color="success" if summary['total_minutes'] > 0 else "secondary",
+                     className="fs-6")
+        ], width="auto"),
+    ], className="mb-3 align-items-center")
+    sections.append(header)
+    
+    # Completed exercises from planner
+    if exercises_by_cat:
+        ex_section = dbc.Card([
+            dbc.CardHeader("From Planner", className="py-2"),
+            dbc.CardBody([
+                html.Div([
+                    html.Div([
+                        dbc.Badge(cat, color="info", className="me-2"),
+                        html.Span(f"{sum(e['duration'] for e in exs)} min — "),
+                        html.Span(", ".join(e["name"] for e in exs), className="text-muted"),
+                    ], className="mb-2")
+                    for cat, exs in exercises_by_cat.items()
+                ])
+            ], className="py-2")
+        ], className="mb-3")
+        sections.append(ex_section)
+    
+    # Recordings
+    if summary["recordings"]:
+        rec_items = []
+        for rec in summary["recordings"]:
+            badges = []
+            if rec["has_video"]:
+                badges.append(dbc.Badge("🎬 Video", color="info", className="me-1"))
+            elif rec["has_recording"]:
+                badges.append(dbc.Badge("🎵 Audio", color="secondary", className="me-1"))
+            if rec["rating"]:
+                badges.append(html.Span("⭐" * rec["rating"], className="ms-1"))
+            
+            rec_items.append(
+                dbc.ListGroupItem([
+                    html.Div([
+                        html.Strong(rec["title"] or "Untitled"),
+                        *badges,
+                        html.Span(f" • {rec['duration'] or 0} min", className="text-muted"),
+                    ]),
+                    html.Small(rec["notes"], className="text-muted") if rec["notes"] else None,
+                    dbc.Button("Review →", href="/review", size="sm", color="link", className="p-0 float-end")
+                ])
+            )
+        
+        rec_section = dbc.Card([
+            dbc.CardHeader("Recordings", className="py-2"),
+            dbc.CardBody([
+                dbc.ListGroup(rec_items, flush=True)
+            ], className="p-0")
+        ], className="mb-3")
+        sections.append(rec_section)
+    
+    # Manual practice entries
+    manual_items = []
+    for m in summary["manual_entries"]:
+        manual_items.append(
+            dbc.ListGroupItem([
+                dbc.Row([
+                    dbc.Col([
+                        dbc.Badge(m["category"] or "Other", color="secondary", className="me-2"),
+                        html.Span(f"{m['duration']} min"),
+                        html.Span(f" — {m['description']}" if m['description'] else "", className="text-muted"),
+                    ]),
+                    dbc.Col([
+                        dbc.Button("✎", id={"type": "edit-manual", "id": m["id"]}, 
+                                  size="sm", color="link", className="p-0 me-2"),
+                        dbc.Button("🗑", id={"type": "delete-manual", "id": m["id"]}, 
+                                  size="sm", color="link", className="p-0 text-danger"),
+                    ], width="auto"),
+                ], className="align-items-center")
+            ])
+        )
+    
+    # Add entry form
+    add_form = dbc.Row([
+        dbc.Col([
+            dcc.Dropdown(
+                id="manual-category",
+                options=[{"label": c, "value": c} for c in PRACTICE_CATEGORIES],
+                placeholder="Category",
+                className="mb-2 mb-md-0"
+            ),
+        ], md=3),
+        dbc.Col([
+            dbc.Input(id="manual-duration", type="number", min=1, placeholder="Min", 
+                     style={"width": "80px"}),
+        ], md=2),
+        dbc.Col([
+            dbc.Input(id="manual-description", placeholder="What did you practice?"),
+        ], md=5),
+        dbc.Col([
+            dbc.Button("+ Add", id="btn-add-manual", color="success", size="sm"),
+        ], md=2),
+    ], className="g-2 mt-2")
+    
+    manual_section = dbc.Card([
+        dbc.CardHeader("Additional Practice", className="py-2"),
+        dbc.CardBody([
+            dbc.ListGroup(manual_items, flush=True) if manual_items else html.P("No manual entries", className="text-muted mb-2"),
+            add_form,
+            html.Div(id="manual-status", className="mt-2"),
+        ])
+    ], className="mb-3")
+    sections.append(manual_section)
+    
+    # Daily notes
+    notes_section = dbc.Card([
+        dbc.CardHeader("Daily Notes", className="py-2"),
+        dbc.CardBody([
+            dbc.Textarea(
+                id="journal-notes",
+                value=summary["journal_notes"] or "",
+                placeholder="How did practice go today? Any insights or things to work on?",
+                rows=3,
+                className="mb-2"
+            ),
+            dbc.Button("Save Notes", id="btn-save-notes", color="primary", size="sm"),
+            html.Span(id="notes-status", className="ms-2 text-muted"),
+        ])
+    ], className="mb-3")
+    sections.append(notes_section)
+    
+    return html.Div(sections)
 
 
 def create_review_page():
@@ -1766,67 +1948,131 @@ def save_session(n_clicks, title, category, description, notes, rating, state):
 # --- Journal callbacks ---
 
 @callback(
-    Output("journal-sessions-list", "children"),
-    Input("btn-refresh-journal", "n_clicks"),
-    Input("journal-date-range", "start_date"),
-    Input("journal-date-range", "end_date"),
-    Input("journal-category-filter", "value")
+    Output("journal-week-label", "children"),
+    Output("journal-week-overview", "children"),
+    Output("journal-day-details", "children"),
+    Output("journal-selected-date", "data"),
+    Output("journal-week-start", "data"),
+    Input("journal-prev-week", "n_clicks"),
+    Input("journal-next-week", "n_clicks"),
+    Input({"type": "journal-day-btn", "date": ALL}, "n_clicks"),
+    Input("url", "pathname"),
+    State("journal-selected-date", "data"),
+    State("journal-week-start", "data"),
+    prevent_initial_call=False
 )
-def update_journal_list(n, start_date, end_date, category):
-    sessions = get_recent_sessions(limit=50)
+def update_journal_view(prev_clicks, next_clicks, day_clicks, pathname,
+                        selected_date_str, week_start_str):
+    """Handle week navigation and day selection"""
+    if pathname != "/journal":
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
-    if not sessions:
-        return dbc.Alert("No practice sessions yet. Start recording!", color="info")
+    # Parse stored dates
+    today = date.today()
     
-    # Filter
-    if category and category != "all":
-        sessions = [s for s in sessions if s.category == category]
+    if selected_date_str:
+        selected_date = date.fromisoformat(selected_date_str)
+    else:
+        selected_date = today
     
-    cards = []
-    for s in sessions:
-        rating_str = "⭐" * (s.rating or 0) if s.rating else ""
-        recording_badge = dbc.Badge("🎬 Video", color="info", className="me-1") if s.has_video else ""
-        recording_badge2 = dbc.Badge("🎵 Audio", color="secondary", className="me-1") if s.has_recording and not s.has_video else ""
-        
-        cards.append(
-            dbc.Card([
-                dbc.CardBody([
-                    html.Div([
-                        html.H5(s.title or "Untitled", className="d-inline me-2"),
-                        dbc.Badge(s.category, color="primary"),
-                        recording_badge,
-                        recording_badge2,
-                    ]),
-                    html.Small(f"{s.date} • {s.duration_minutes} min {rating_str}", className="text-muted"),
-                    html.P(s.notes, className="mt-2 mb-0") if s.notes else None,
-                ])
-            ], className="mb-2")
-        )
+    if week_start_str:
+        week_start = date.fromisoformat(week_start_str)
+    else:
+        week_start = today - timedelta(days=today.weekday())
     
-    return cards
+    triggered = ctx.triggered_id
+    
+    # Handle week navigation
+    if triggered == "journal-prev-week":
+        week_start = week_start - timedelta(days=7)
+        selected_date = week_start  # Select Monday of new week
+    elif triggered == "journal-next-week":
+        new_week_start = week_start + timedelta(days=7)
+        if new_week_start <= today:
+            week_start = new_week_start
+            selected_date = week_start
+    elif isinstance(triggered, dict) and triggered.get("type") == "journal-day-btn":
+        selected_date = date.fromisoformat(triggered["date"])
+    
+    # Build week label
+    week_end = week_start + timedelta(days=6)
+    week_label = f"{week_start.strftime('%b %d')} – {week_end.strftime('%b %d, %Y')}"
+    
+    # Build components
+    week_overview = _build_week_overview(week_start, selected_date)
+    day_details = _build_day_details(selected_date)
+    
+    return week_label, week_overview, day_details, selected_date.isoformat(), week_start.isoformat()
 
 
 @callback(
     Output("manual-status", "children"),
+    Output("journal-day-details", "children", allow_duplicate=True),
     Input("btn-add-manual", "n_clicks"),
-    State("manual-title", "value"),
     State("manual-category", "value"),
     State("manual-duration", "value"),
-    State("manual-notes", "value"),
+    State("manual-description", "value"),
+    State("journal-selected-date", "data"),
     prevent_initial_call=True
 )
-def add_manual_entry(n, title, category, duration, notes):
-    if not all([title, category, duration]):
-        return dbc.Alert("Please fill in title, category, and duration", color="warning")
+def add_manual_entry(n_clicks, category, duration, description, selected_date_str):
+    """Add a manual practice entry"""
+    if not n_clicks:
+        return dash.no_update, dash.no_update
     
-    session = create_practice_session(
-        title=title,
+    if not category or not duration:
+        return dbc.Alert("Please select a category and enter duration", color="warning", duration=3000), dash.no_update
+    
+    selected_date = date.fromisoformat(selected_date_str) if selected_date_str else date.today()
+    
+    add_manual_practice(
+        target_date=selected_date,
         category=category,
         duration_minutes=int(duration),
-        notes=notes or ""
+        description=description or ""
     )
     
-    return dbc.Alert(f"✅ Added: {title}", color="success")
+    # Rebuild day details
+    day_details = _build_day_details(selected_date)
+    
+    return dbc.Alert("✓ Added", color="success", duration=2000), day_details
+
+
+@callback(
+    Output("journal-day-details", "children", allow_duplicate=True),
+    Input({"type": "delete-manual", "id": ALL}, "n_clicks"),
+    State({"type": "delete-manual", "id": ALL}, "id"),
+    State("journal-selected-date", "data"),
+    prevent_initial_call=True
+)
+def delete_manual_entry(n_clicks_list, ids, selected_date_str):
+    """Delete a manual practice entry"""
+    if not ctx.triggered_id or not any(n for n in n_clicks_list if n):
+        return dash.no_update
+    
+    entry_id = ctx.triggered_id["id"]
+    delete_manual_practice(entry_id)
+    
+    selected_date = date.fromisoformat(selected_date_str) if selected_date_str else date.today()
+    return _build_day_details(selected_date)
+
+
+@callback(
+    Output("notes-status", "children"),
+    Input("btn-save-notes", "n_clicks"),
+    State("journal-notes", "value"),
+    State("journal-selected-date", "data"),
+    prevent_initial_call=True
+)
+def save_journal_notes(n_clicks, notes, selected_date_str):
+    """Save daily journal notes"""
+    if not n_clicks:
+        return dash.no_update
+    
+    selected_date = date.fromisoformat(selected_date_str) if selected_date_str else date.today()
+    save_daily_notes(selected_date, notes or "")
+    
+    return "✓ Saved"
 
 
 # --- Review callbacks ---
