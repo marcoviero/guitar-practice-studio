@@ -17,17 +17,24 @@ import plotly.graph_objects as go
 from flask import send_from_directory
 import numpy as np
 
-from .config import PRACTICE_CATEGORIES, RECORDINGS_DIR, DEBUG, HOST, PORT
+from .config import RECORDINGS_DIR, DEBUG, HOST, PORT
 from .database import (
-    init_db, get_session, PracticeSession, Goal, Annotation,
+    init_db, get_session, PracticeSession, Goal, Annotation, Exercise, WeeklyPlanEntry, RepertoirePiece,
     create_practice_session, get_recent_sessions, add_annotation,
-    get_active_goals, get_practice_stats, get_sessions_by_date_range
+    get_active_goals, get_practice_stats, get_sessions_by_date_range,
+    init_default_exercises, get_or_create_current_week_plan, get_exercises_by_category,
+    get_week_plan_entries, set_plan_entry, toggle_entry_completed, get_today_exercises,
+    get_category_targets, get_week_category_totals,
+    reorder_today_entry, remove_today_entry,
+    get_all_repertoire, get_active_repertoire, add_repertoire_piece, update_repertoire_piece, delete_repertoire_piece,
+    PRACTICE_CATEGORIES, PIECE_TYPES, PIECE_STATUSES
 )
 from .recorder import Recorder, PlaybackController, AUDIO_AVAILABLE, VIDEO_AVAILABLE
 from .audio_utils import load_audio, generate_waveform_data, get_audio_duration
 
 # Initialize
 init_db()
+init_default_exercises()  # Create default exercises if needed
 recorder = Recorder()
 playback = PlaybackController()
 
@@ -82,6 +89,20 @@ app.index_string = '''
             .VirtualizedSelectFocusedOption {
                 background-color: #444 !important;
             }
+            /* Input field fixes for dark mode */
+            input.form-control, textarea.form-control {
+                background-color: #303030 !important;
+                color: #fff !important;
+                border-color: #444 !important;
+            }
+            input.form-control::placeholder, textarea.form-control::placeholder {
+                color: #888 !important;
+            }
+            input.form-control:focus, textarea.form-control:focus {
+                background-color: #383838 !important;
+                color: #fff !important;
+                border-color: #375a7f !important;
+            }
         </style>
     </head>
     <body>
@@ -104,10 +125,11 @@ def create_navbar():
         dbc.Container([
             dbc.NavbarBrand("🎸 Guitar Practice Studio", className="ms-2 fs-4"),
             dbc.Nav([
-                dbc.NavItem(dbc.NavLink("Record", href="/", active="exact")),
+                dbc.NavItem(dbc.NavLink("Planner", href="/planner", active="exact")),
+                dbc.NavItem(dbc.NavLink("Practice", href="/", active="exact")),
+                dbc.NavItem(dbc.NavLink("Repertoire", href="/repertoire", active="exact")),
                 dbc.NavItem(dbc.NavLink("Journal", href="/journal", active="exact")),
                 dbc.NavItem(dbc.NavLink("Review", href="/review", active="exact")),
-                dbc.NavItem(dbc.NavLink("Goals", href="/goals", active="exact")),
                 dbc.NavItem(dbc.NavLink("Stats", href="/stats", active="exact")),
             ], navbar=True),
         ]),
@@ -115,6 +137,393 @@ def create_navbar():
         dark=True,
         className="mb-4"
     )
+
+
+# ============================================================================
+# PLANNER PAGE
+# ============================================================================
+
+DAY_NAMES = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+
+def _build_today_card(plan_id: int):
+    """Build the Today's Practice card - extracted for dynamic updates"""
+    today_exercises = get_today_exercises(plan_id)
+    today_name = DAY_NAMES[date.today().weekday()]
+    total_today = sum(ex["duration"] for ex in today_exercises)
+    
+    if today_exercises:
+        today_items = []
+        for i, ex in enumerate(today_exercises):
+            # Reorder and remove buttons
+            controls = html.Div([
+                dbc.Button(
+                    "↑", 
+                    id={"type": "today-move-up", "entry": ex["entry_id"]},
+                    size="sm", 
+                    color="secondary", 
+                    outline=True,
+                    className="me-1 py-0 px-1",
+                    disabled=(i == 0),
+                    style={"fontSize": "0.7rem", "lineHeight": "1"}
+                ),
+                dbc.Button(
+                    "↓", 
+                    id={"type": "today-move-down", "entry": ex["entry_id"]},
+                    size="sm", 
+                    color="secondary", 
+                    outline=True,
+                    className="me-2 py-0 px-1",
+                    disabled=(i == len(today_exercises) - 1),
+                    style={"fontSize": "0.7rem", "lineHeight": "1"}
+                ),
+            ], className="d-inline-flex me-2")
+            
+            today_items.append(
+                dbc.ListGroupItem([
+                    controls,
+                    dbc.Checkbox(
+                        id={"type": "today-complete", "entry": ex["entry_id"]},
+                        value=ex["completed"],
+                        className="me-2"
+                    ),
+                    html.Span(
+                        ex["name"], 
+                        className="text-decoration-line-through flex-grow-1" if ex["completed"] else "flex-grow-1"
+                    ),
+                    dbc.Badge(f"{ex['duration']} min", color="secondary", className="ms-2"),
+                    dbc.Badge(ex["category"], color="info", className="ms-1"),
+                    dbc.Button(
+                        "✕",
+                        id={"type": "today-remove", "entry": ex["entry_id"], "exercise": ex["exercise_id"]},
+                        size="sm",
+                        color="danger",
+                        outline=True,
+                        className="ms-2 py-0 px-1",
+                        style={"fontSize": "0.7rem", "lineHeight": "1"}
+                    ),
+                ], className="d-flex align-items-center")
+            )
+        return dbc.Card([
+            dbc.CardHeader([
+                html.H5(f"Today's Practice ({today_name})", className="mb-0 d-inline"),
+                dbc.Badge(f"{total_today} min total", color="primary", className="ms-2")
+            ]),
+            dbc.CardBody(dbc.ListGroup(today_items, flush=True))
+        ], className="mb-4", color="dark", outline=True)
+    else:
+        return dbc.Card([
+            dbc.CardHeader(html.H5(f"Today's Practice ({today_name})", className="mb-0")),
+            dbc.CardBody(html.P("No exercises scheduled for today. Use the grid below to plan your week!",
+                               className="text-muted mb-0"))
+        ], className="mb-4", color="dark", outline=True)
+
+
+def _build_category_grids(plan_id: int):
+    """Build the category grid cards - extracted for dynamic updates"""
+    exercises_by_cat = get_exercises_by_category()
+    entries = get_week_plan_entries(plan_id)
+    category_targets = get_category_targets()
+    
+    # Build lookup: (exercise_id, day) -> entry exists
+    scheduled = {(e.exercise_id, e.day_of_week) for e in entries}
+    
+    # Calculate totals per category per day: {category: {day: total_minutes}}
+    daily_totals = {}
+    db = get_session()
+    for entry in entries:
+        exercise = db.query(Exercise).get(entry.exercise_id)
+        if exercise:
+            cat = exercise.category
+            day = entry.day_of_week
+            duration = entry.duration_minutes or exercise.default_duration_minutes
+            if cat not in daily_totals:
+                daily_totals[cat] = {}
+            daily_totals[cat][day] = daily_totals[cat].get(day, 0) + duration
+    db.close()
+    
+    # Create a card for each category with its exercise grid
+    category_cards = []
+    
+    for category in PRACTICE_CATEGORIES:
+        exercises = exercises_by_cat.get(category, [])
+        if not exercises:
+            continue
+        
+        target_mins = category_targets.get(category, 15)
+        cat_daily = daily_totals.get(category, {})
+        
+        # Header with target info
+        header_content = html.Div([
+            html.H5(category, className="mb-0 d-inline"),
+            dbc.Badge(f"Target: {target_mins} min/day", color="secondary", className="ms-2"),
+        ])
+        
+        # Table header: Days as columns with per-day progress
+        day_headers = [html.Th("Exercise", style={"minWidth": "150px"})]
+        for day_idx, day_name in enumerate(DAY_NAMES):
+            day_total = cat_daily.get(day_idx, 0)
+            day_met = day_total >= target_mins
+            
+            # Style for header cell - green when target met
+            header_style = {
+                "width": "55px",
+                "backgroundColor": "rgba(40, 167, 69, 0.35)" if day_met else "transparent",
+                "textAlign": "center",
+                "verticalAlign": "middle"
+            }
+            
+            # Show day name and minutes scheduled
+            header_text = html.Div([
+                html.Div(day_name[:3], style={"fontWeight": "bold"}),
+                html.Small(
+                    f"{day_total}m", 
+                    className="text-success" if day_met else "text-muted",
+                    style={"fontSize": "0.75em"}
+                )
+            ])
+            
+            day_headers.append(html.Th(header_text, style=header_style))
+        
+        header = html.Thead(html.Tr(day_headers))
+        
+        # Table body: one row per exercise
+        rows = []
+        for ex in exercises:
+            cells = [html.Td([
+                ex.name,
+                html.Small(f" ({ex.default_duration_minutes}m)", className="text-muted")
+            ], className="text-nowrap")]
+            
+            for day_idx in range(7):
+                is_checked = (ex.id, day_idx) in scheduled
+                day_total = cat_daily.get(day_idx, 0)
+                day_met = day_total >= target_mins
+                
+                checkbox = dbc.Checkbox(
+                    id={"type": "plan-checkbox", "exercise": ex.id, "day": day_idx},
+                    value=is_checked,
+                    className="m-0"
+                )
+                
+                # Cell style - highlight column if target met
+                cell_style = {
+                    "textAlign": "center",
+                    "backgroundColor": "rgba(40, 167, 69, 0.15)" if day_met else "transparent"
+                }
+                
+                cells.append(html.Td(checkbox, style=cell_style))
+            rows.append(html.Tr(cells))
+        
+        body = html.Tbody(rows)
+        
+        table = dbc.Table(
+            [header, body],
+            bordered=True,
+            hover=True,
+            size="sm",
+            className="mb-0"
+        )
+        
+        card = dbc.Card([
+            dbc.CardHeader(header_content),
+            dbc.CardBody(table, className="p-2")
+        ], className="mb-3")
+        
+        category_cards.append(card)
+    
+    return category_cards
+
+
+def create_planner_page():
+    """Weekly planner page with exercise grid by category"""
+    plan_id, week_start = get_or_create_current_week_plan()
+    
+    # Week navigation
+    week_end = week_start + timedelta(days=6)
+    week_nav = dbc.Row([
+        dbc.Col([
+            dbc.Button("← Prev Week", id="btn-prev-week", color="secondary", size="sm"),
+        ], width="auto"),
+        dbc.Col([
+            html.H4(f"Week of {week_start.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}", 
+                   className="text-center mb-0"),
+        ]),
+        dbc.Col([
+            dbc.Button("Next Week →", id="btn-next-week", color="secondary", size="sm"),
+        ], width="auto"),
+    ], className="mb-4 align-items-center")
+    
+    return dbc.Container([
+        html.H2("Weekly Planner", className="mb-3"),
+        
+        # Store current plan ID
+        dcc.Store(id="current-plan-id", data=plan_id),
+        
+        # Today's summary (dynamic)
+        html.Div(_build_today_card(plan_id), id="today-card-container"),
+        
+        # Week navigation
+        week_nav,
+        
+        # Category grids (dynamic)
+        html.Div(_build_category_grids(plan_id), id="planner-grids"),
+        
+    ], fluid=True, className="py-3")
+
+
+# ============================================================================
+# REPERTOIRE PAGE
+# ============================================================================
+
+def create_repertoire_page():
+    """Repertoire management page for songs, etudes, and suites"""
+    pieces = get_all_repertoire()
+    
+    # Group by status
+    by_status = {}
+    for piece in pieces:
+        status = piece.status or "Learning"
+        if status not in by_status:
+            by_status[status] = []
+        by_status[status].append(piece)
+    
+    # Create table for each status group
+    status_tables = []
+    
+    for status in ["Learning", "Review", "Mastered", "Want to Learn"]:
+        status_pieces = by_status.get(status, [])
+        if not status_pieces and status not in ["Learning", "Want to Learn"]:
+            continue
+        
+        rows = []
+        for piece in status_pieces:
+            difficulty_stars = "★" * (piece.difficulty or 0) + "☆" * (5 - (piece.difficulty or 0)) if piece.difficulty else "—"
+            
+            row = html.Tr([
+                html.Td(piece.title),
+                html.Td(piece.artist or "—"),
+                html.Td(dbc.Badge(piece.piece_type or "Song", color="info")),
+                html.Td(difficulty_stars, style={"color": "#ffc107"}),
+                html.Td(piece.genre or "—"),
+                html.Td([
+                    dbc.Button("Edit", id={"type": "edit-piece", "id": piece.id}, 
+                              size="sm", color="secondary", className="me-1"),
+                    dbc.Button("✓", id={"type": "advance-piece", "id": piece.id},
+                              size="sm", color="success", className="me-1",
+                              title="Advance to next status"),
+                    dbc.Button("🗑", id={"type": "delete-piece", "id": piece.id},
+                              size="sm", color="danger", outline=True),
+                ])
+            ])
+            rows.append(row)
+        
+        table = dbc.Table([
+            html.Thead(html.Tr([
+                html.Th("Title"),
+                html.Th("Artist/Composer"),
+                html.Th("Type"),
+                html.Th("Difficulty"),
+                html.Th("Genre"),
+                html.Th("Actions", style={"width": "150px"})
+            ])),
+            html.Tbody(rows) if rows else html.Tbody([
+                html.Tr([html.Td("No pieces in this category", colSpan=6, className="text-muted text-center")])
+            ])
+        ], bordered=True, hover=True, size="sm")
+        
+        # Color code by status
+        status_colors = {
+            "Learning": "warning",
+            "Review": "info",
+            "Mastered": "success",
+            "Want to Learn": "secondary"
+        }
+        
+        card = dbc.Card([
+            dbc.CardHeader([
+                html.H5(status, className="mb-0 d-inline"),
+                dbc.Badge(str(len(status_pieces)), color=status_colors.get(status, "secondary"), className="ms-2")
+            ]),
+            dbc.CardBody(table, className="p-2")
+        ], className="mb-3")
+        
+        status_tables.append(card)
+    
+    # Add new piece form
+    add_form = dbc.Card([
+        dbc.CardHeader(html.H5("Add New Piece", className="mb-0")),
+        dbc.CardBody([
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Title *"),
+                    dbc.Input(id="new-piece-title", placeholder="Song/Etude title")
+                ], md=4),
+                dbc.Col([
+                    dbc.Label("Artist/Composer"),
+                    dbc.Input(id="new-piece-artist", placeholder="Artist or composer")
+                ], md=4),
+                dbc.Col([
+                    dbc.Label("Type"),
+                    dcc.Dropdown(
+                        id="new-piece-type",
+                        options=[{"label": t, "value": t} for t in PIECE_TYPES],
+                        value="Song",
+                        clearable=False
+                    )
+                ], md=4),
+            ], className="mb-3"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Genre"),
+                    dbc.Input(id="new-piece-genre", placeholder="e.g., Rock, Classical, Blues")
+                ], md=3),
+                dbc.Col([
+                    dbc.Label("Difficulty (1-5)"),
+                    dcc.Slider(
+                        id="new-piece-difficulty",
+                        min=1, max=5, step=1, value=3,
+                        marks={i: str(i) for i in range(1, 6)}
+                    )
+                ], md=3),
+                dbc.Col([
+                    dbc.Label("Status"),
+                    dcc.Dropdown(
+                        id="new-piece-status",
+                        options=[{"label": s, "value": s} for s in PIECE_STATUSES if s != "Archived"],
+                        value="Learning",
+                        clearable=False
+                    )
+                ], md=3),
+                dbc.Col([
+                    dbc.Label("Link (optional)"),
+                    dbc.Input(id="new-piece-link", placeholder="YouTube, tab URL, etc.")
+                ], md=3),
+            ], className="mb-3"),
+            dbc.Row([
+                dbc.Col([
+                    dbc.Label("Notes"),
+                    dbc.Textarea(id="new-piece-notes", placeholder="Any notes about this piece...", rows=2)
+                ])
+            ], className="mb-3"),
+            dbc.Button("Add to Repertoire", id="btn-add-piece", color="primary")
+        ])
+    ], className="mb-4")
+    
+    return dbc.Container([
+        html.H2("Repertoire", className="mb-3"),
+        html.P("Manage your songs, etudes, and suites. Pieces here will appear in the Songs section of your practice planner.",
+              className="text-muted mb-4"),
+        
+        # Add form
+        add_form,
+        
+        # Status message
+        html.Div(id="repertoire-status", className="mb-3"),
+        
+        # Pieces by status
+        html.Div(status_tables, id="repertoire-tables"),
+        
+    ], fluid=True, className="py-3")
 
 
 def create_record_page():
@@ -551,16 +960,215 @@ app.layout = html.Div([
     Input("url", "pathname")
 )
 def display_page(pathname):
-    if pathname == "/journal":
+    if pathname == "/planner":
+        return create_planner_page()
+    elif pathname == "/repertoire":
+        return create_repertoire_page()
+    elif pathname == "/journal":
         return create_journal_page()
     elif pathname == "/review":
         return create_review_page()
-    elif pathname == "/goals":
-        return create_goals_page()
     elif pathname == "/stats":
         return create_stats_page()
     else:
         return create_record_page()
+
+
+# --- Planner callbacks ---
+
+@callback(
+    Output("today-card-container", "children"),
+    Output("planner-grids", "children"),
+    Input({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "value"),
+    State({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "id"),
+    State("current-plan-id", "data"),
+    prevent_initial_call=True
+)
+def handle_plan_checkbox(values, ids, plan_id):
+    """Handle checkbox changes in the planner grid - updates UI dynamically"""
+    if not ctx.triggered_id or not plan_id:
+        return dash.no_update, dash.no_update
+    
+    # Find which checkbox was changed
+    triggered = ctx.triggered_id
+    exercise_id = triggered["exercise"]
+    day = triggered["day"]
+    
+    # Find the new value
+    for i, id_dict in enumerate(ids):
+        if id_dict["exercise"] == exercise_id and id_dict["day"] == day:
+            new_value = values[i]
+            break
+    else:
+        return dash.no_update, dash.no_update
+    
+    # Update database
+    set_plan_entry(plan_id, exercise_id, day, new_value)
+    
+    # Return updated components
+    return _build_today_card(plan_id), _build_category_grids(plan_id)
+
+
+@callback(
+    Output({"type": "today-complete", "entry": MATCH}, "value"),
+    Input({"type": "today-complete", "entry": MATCH}, "value"),
+    State({"type": "today-complete", "entry": MATCH}, "id"),
+    prevent_initial_call=True
+)
+def handle_today_complete(value, id_dict):
+    """Handle completion checkbox for today's exercises"""
+    entry_id = id_dict["entry"]
+    toggle_entry_completed(entry_id, value)
+    return value
+
+
+@callback(
+    Output("today-card-container", "children", allow_duplicate=True),
+    Input({"type": "today-move-up", "entry": ALL}, "n_clicks"),
+    State({"type": "today-move-up", "entry": ALL}, "id"),
+    State("current-plan-id", "data"),
+    prevent_initial_call=True
+)
+def handle_move_up(n_clicks_list, ids, plan_id):
+    """Move an exercise up in today's list"""
+    if not ctx.triggered_id or not any(n for n in n_clicks_list if n) or not plan_id:
+        return dash.no_update
+    
+    entry_id = ctx.triggered_id["entry"]
+    reorder_today_entry(entry_id, "up")
+    return _build_today_card(plan_id)
+
+
+@callback(
+    Output("today-card-container", "children", allow_duplicate=True),
+    Input({"type": "today-move-down", "entry": ALL}, "n_clicks"),
+    State({"type": "today-move-down", "entry": ALL}, "id"),
+    State("current-plan-id", "data"),
+    prevent_initial_call=True
+)
+def handle_move_down(n_clicks_list, ids, plan_id):
+    """Move an exercise down in today's list"""
+    if not ctx.triggered_id or not any(n for n in n_clicks_list if n) or not plan_id:
+        return dash.no_update
+    
+    entry_id = ctx.triggered_id["entry"]
+    reorder_today_entry(entry_id, "down")
+    return _build_today_card(plan_id)
+
+
+@callback(
+    Output("today-card-container", "children", allow_duplicate=True),
+    Output("planner-grids", "children", allow_duplicate=True),
+    Input({"type": "today-remove", "entry": ALL, "exercise": ALL}, "n_clicks"),
+    State({"type": "today-remove", "entry": ALL, "exercise": ALL}, "id"),
+    State("current-plan-id", "data"),
+    prevent_initial_call=True
+)
+def handle_remove_today(n_clicks_list, ids, plan_id):
+    """Remove an exercise from today's schedule"""
+    if not ctx.triggered_id or not any(n for n in n_clicks_list if n) or not plan_id:
+        return dash.no_update, dash.no_update
+    
+    exercise_id = ctx.triggered_id["exercise"]
+    remove_today_entry(plan_id, exercise_id)
+    
+    # Update both today's card and grids (checkbox needs to uncheck)
+    return _build_today_card(plan_id), _build_category_grids(plan_id)
+
+
+# --- Repertoire callbacks ---
+
+@callback(
+    Output("repertoire-status", "children"),
+    Output("new-piece-title", "value"),
+    Output("new-piece-artist", "value"),
+    Output("new-piece-genre", "value"),
+    Output("new-piece-link", "value"),
+    Output("new-piece-notes", "value"),
+    Input("btn-add-piece", "n_clicks"),
+    State("new-piece-title", "value"),
+    State("new-piece-artist", "value"),
+    State("new-piece-type", "value"),
+    State("new-piece-genre", "value"),
+    State("new-piece-difficulty", "value"),
+    State("new-piece-status", "value"),
+    State("new-piece-link", "value"),
+    State("new-piece-notes", "value"),
+    prevent_initial_call=True
+)
+def add_piece(n_clicks, title, artist, piece_type, genre, difficulty, status, link, notes):
+    """Add a new piece to the repertoire"""
+    if not title:
+        return dbc.Alert("Please enter a title", color="warning"), dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    add_repertoire_piece(
+        title=title,
+        artist=artist,
+        piece_type=piece_type,
+        genre=genre,
+        difficulty=difficulty,
+        status=status,
+        link=link,
+        notes=notes
+    )
+    
+    return (
+        dbc.Alert(f"Added '{title}' to repertoire!", color="success", duration=3000),
+        "",  # Clear title
+        "",  # Clear artist
+        "",  # Clear genre
+        "",  # Clear link
+        ""   # Clear notes
+    )
+
+
+@callback(
+    Output("url", "pathname", allow_duplicate=True),
+    Input({"type": "advance-piece", "id": ALL}, "n_clicks"),
+    State({"type": "advance-piece", "id": ALL}, "id"),
+    prevent_initial_call=True
+)
+def advance_piece_status(n_clicks_list, ids):
+    """Advance a piece to the next status"""
+    if not ctx.triggered_id or not any(n_clicks_list):
+        return dash.no_update
+    
+    piece_id = ctx.triggered_id["id"]
+    
+    # Get current status and advance
+    db = get_session()
+    piece = db.query(RepertoirePiece).get(piece_id)
+    if piece:
+        status_order = ["Want to Learn", "Learning", "Review", "Mastered"]
+        current_idx = status_order.index(piece.status) if piece.status in status_order else 0
+        if current_idx < len(status_order) - 1:
+            new_status = status_order[current_idx + 1]
+            piece.status = new_status
+            if new_status == "Learning" and not piece.date_started:
+                piece.date_started = date.today()
+            elif new_status == "Mastered":
+                piece.date_mastered = date.today()
+            db.commit()
+    db.close()
+    
+    return "/repertoire"  # Refresh page
+
+
+@callback(
+    Output("url", "pathname", allow_duplicate=True),
+    Input({"type": "delete-piece", "id": ALL}, "n_clicks"),
+    State({"type": "delete-piece", "id": ALL}, "id"),
+    prevent_initial_call=True
+)
+def delete_piece(n_clicks_list, ids):
+    """Delete a piece from repertoire"""
+    if not ctx.triggered_id or not any(n_clicks_list):
+        return dash.no_update
+    
+    piece_id = ctx.triggered_id["id"]
+    delete_repertoire_piece(piece_id)
+    
+    return "/repertoire"  # Refresh page
 
 
 # --- Recording callbacks ---
@@ -1002,7 +1610,7 @@ def populate_recordings_table(pathname, refresh_clicks, refresh_trigger):
             id={"type": "title-input", "index": s.id},
             value=s.title or "Untitled",
             size="sm",
-            className="border-0 bg-transparent p-0",
+            className="bg-dark text-light border-secondary",
             style={"width": "200px"},
             debounce=True,  # Only fires callback after user stops typing
         )

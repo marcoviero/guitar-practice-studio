@@ -1,0 +1,218 @@
+# Guitar Practice Studio - Exercise Configuration
+# Edit this file to customize your practice exercises
+
+[categories]
+# Target minutes per category per day (for progress indicators)
+[categories.technique]
+name = "Technique"
+target_minutes = 15
+color = "#28a745"  # Green when complete
+
+[categories.chord_perfect]
+name = "Chord Perfect"
+target_minutes = 10
+color = "#28a745"
+
+[categories.songs]
+name = "Songs"
+target_minutes = 20
+color = "#28a745"
+# Note: Songs pull from Repertoire tab - exercises here are practice types
+
+[categories.ear_training]
+name = "Ear Training"
+target_minutes = 10
+color = "#28a745"
+
+[categories.theory]
+name = "Theory"
+target_minutes = 10
+color = "#28a745"
+
+[categories.transcribing]
+name = "Transcribing"
+target_minutes = 15
+color = "#28a745"
+
+
+# ============================================================================
+# EXERCISES BY CATEGORY
+# ============================================================================
+
+[[exercises]]
+name = "Spider Exercise"
+category = "Technique"
+duration = 5
+description = "Chromatic finger independence exercise"
+
+[[exercises]]
+name = "Finger Stretching"
+category = "Technique"
+duration = 3
+description = "Warm-up stretches for fretting hand"
+
+[[exercises]]
+name = "Chromatic Scale"
+category = "Technique"
+duration = 5
+description = "Full chromatic scale practice"
+
+[[exercises]]
+name = "Alternate Picking"
+category = "Technique"
+duration = 5
+description = "Strict alternate picking drills"
+
+[[exercises]]
+name = "Hammer-ons/Pull-offs"
+category = "Technique"
+duration = 5
+description = "Legato technique practice"
+
+[[exercises]]
+name = "Barre Chord Practice"
+category = "Technique"
+duration = 5
+description = "Barre chord strength and clarity"
+
+# --- Chord Perfect ---
+
+[[exercises]]
+name = "One Minute Changes"
+category = "Chord Perfect"
+duration = 5
+description = "Timed chord transition drills"
+
+[[exercises]]
+name = "A-D-E Transitions"
+category = "Chord Perfect"
+duration = 5
+description = "Open chord family transitions"
+
+[[exercises]]
+name = "G-C-D Transitions"
+category = "Chord Perfect"
+duration = 5
+description = "G family chord changes"
+
+[[exercises]]
+name = "Am-Em-C-G Transitions"
+category = "Chord Perfect"
+duration = 5
+description = "Common progression practice"
+
+[[exercises]]
+name = "Barre Chord Changes"
+category = "Chord Perfect"
+duration = 5
+description = "Moving barre chord shapes"
+
+[[exercises]]
+name = "Chord Accuracy Check"
+category = "Chord Perfect"
+duration = 3
+description = "Slow chord voicing verification"
+
+# --- Songs (practice types - actual songs come from Repertoire) ---
+
+[[exercises]]
+name = "New Piece - Learning"
+category = "Songs"
+duration = 15
+description = "Focus on currently learning piece from repertoire"
+
+[[exercises]]
+name = "Repertoire Review"
+category = "Songs"
+duration = 10
+description = "Run through known pieces"
+
+[[exercises]]
+name = "Play-Along Practice"
+category = "Songs"
+duration = 10
+description = "Play along with backing track or recording"
+
+[[exercises]]
+name = "Strumming Patterns"
+category = "Songs"
+duration = 5
+description = "Pattern practice for current songs"
+
+[[exercises]]
+name = "Fingerpicking Patterns"
+category = "Songs"
+duration = 5
+description = "Fingerstyle pattern practice"
+
+# --- Ear Training ---
+
+[[exercises]]
+name = "Interval Recognition"
+category = "Ear Training"
+duration = 5
+description = "Identify intervals by ear"
+
+[[exercises]]
+name = "Chord Recognition"
+category = "Ear Training"
+duration = 5
+description = "Identify chord types and qualities"
+
+[[exercises]]
+name = "Melody Picking"
+category = "Ear Training"
+duration = 5
+description = "Figure out melodies by ear"
+
+[[exercises]]
+name = "Rhythm Clapping"
+category = "Ear Training"
+duration = 3
+description = "Rhythm dictation and reproduction"
+
+# --- Theory ---
+
+[[exercises]]
+name = "Scale Theory"
+category = "Theory"
+duration = 5
+description = "Scale construction and modes"
+
+[[exercises]]
+name = "Chord Construction"
+category = "Theory"
+duration = 5
+description = "Building chords from intervals"
+
+[[exercises]]
+name = "Fretboard Notes"
+category = "Theory"
+duration = 5
+description = "Note identification on fretboard"
+
+[[exercises]]
+name = "Key Signatures"
+category = "Theory"
+duration = 5
+description = "Keys, sharps, flats practice"
+
+# --- Transcribing ---
+
+[[exercises]]
+name = "Transcribe Melody"
+category = "Transcribing"
+duration = 10
+description = "Learn a melody by ear"
+
+[[exercises]]
+name = "Transcribe Chords"
+category = "Transcribing"
+duration = 10
+description = "Figure out chord progressions"
+
+[[exercises]]
+name = "Learn Riff by Ear"
+category = "Transcribing"
+duration = 10
+description = "Pick out guitar riffs aurally"

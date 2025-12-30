@@ -23,12 +23,6 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# librosa requires numba which has strict Python version requirements
-# Install with: uv sync --extra audio-effects
-audio-effects = [
-    "librosa>=0.10.2",
-    "numba>=0.60.0",
-]
 dev = [
     "pytest>=7.0.0",
     "ruff>=0.1.0",
