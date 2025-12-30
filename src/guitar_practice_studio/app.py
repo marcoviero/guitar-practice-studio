@@ -527,7 +527,7 @@ def create_repertoire_page():
 
 
 def create_record_page():
-    """Recording page with video preview and controls"""
+    """Recording page with today's practice checklist and optional timer"""
     # Get available devices
     available_cameras = recorder.get_available_cameras()
     available_audio = recorder.get_available_audio_devices()
@@ -542,10 +542,99 @@ def create_record_page():
     if not audio_options:
         audio_options = [{"label": "No audio inputs found", "value": -1}]
     
+    # Get today's exercises from planner
+    plan_id, _ = get_or_create_current_week_plan()
+    today_exercises = get_today_exercises(plan_id)
+    
+    # Build today's checklist for sidebar
+    if today_exercises:
+        checklist_items = []
+        for ex in today_exercises:
+            checklist_items.append(
+                dbc.ListGroupItem([
+                    dbc.Checkbox(
+                        id={"type": "practice-complete", "entry": ex["entry_id"]},
+                        value=ex["completed"],
+                        className="me-2"
+                    ),
+                    html.Span(
+                        ex["name"],
+                        className="text-decoration-line-through" if ex["completed"] else "",
+                        style={"flex": "1"}
+                    ),
+                    dbc.Badge(f"{ex['duration']}m", color="secondary", className="ms-auto"),
+                ], className="d-flex align-items-center py-2")
+            )
+        total_mins = sum(ex["duration"] for ex in today_exercises)
+        completed_mins = sum(ex["duration"] for ex in today_exercises if ex["completed"])
+        
+        today_checklist = html.Div([
+            dbc.Progress(
+                value=(completed_mins / total_mins * 100) if total_mins > 0 else 0,
+                label=f"{completed_mins}/{total_mins} min",
+                className="mb-3",
+                color="success" if completed_mins >= total_mins else "primary"
+            ),
+            dbc.ListGroup(checklist_items, flush=True)
+        ])
+    else:
+        today_checklist = html.P(
+            "No exercises scheduled. Visit the Planner to set up your practice routine!",
+            className="text-muted"
+        )
+    
     return dbc.Container([
         dbc.Row([
+            # Main content area
             dbc.Col([
-                html.H3("Record Practice Session", className="mb-4"),
+                html.H3("Practice Session", className="mb-4"),
+                
+                # Practice Timer Card (countdown)
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.Span("Practice Timer", className="me-auto"),
+                        dbc.Checklist(
+                            id="timer-sync-recording",
+                            options=[{"label": " Sync with recording", "value": "sync"}],
+                            value=[],
+                            inline=True,
+                            className="ms-2 small"
+                        ),
+                    ], className="d-flex align-items-center"),
+                    dbc.CardBody([
+                        # Timer duration setting
+                        dbc.Row([
+                            dbc.Col([
+                                html.Div([
+                                    dbc.Button("−", id="btn-timer-minus", color="secondary", 
+                                              outline=True, size="sm", className="me-2"),
+                                    dbc.Input(
+                                        id="timer-duration-input",
+                                        type="number",
+                                        value=5,
+                                        min=1,
+                                        max=120,
+                                        style={"width": "70px", "display": "inline-block", "textAlign": "center"}
+                                    ),
+                                    html.Span(" min", className="ms-1 me-2"),
+                                    dbc.Button("+", id="btn-timer-plus", color="secondary", 
+                                              outline=True, size="sm"),
+                                ], className="d-flex align-items-center justify-content-center mb-3")
+                            ])
+                        ]),
+                        # Timer display
+                        html.Div(
+                            id="practice-timer-display",
+                            className="display-3 text-center font-monospace mb-3",
+                            children="05:00"
+                        ),
+                        dbc.ButtonGroup([
+                            dbc.Button("▶ Start", id="btn-timer-start", color="success", outline=True),
+                            dbc.Button("⏸ Pause", id="btn-timer-pause", color="warning", outline=True, disabled=True),
+                            dbc.Button("⏹ Reset", id="btn-timer-reset", color="secondary", outline=True),
+                        ], className="w-100"),
+                    ])
+                ], className="mb-4"),
                 
                 # Session info form
                 dbc.Card([
@@ -570,38 +659,49 @@ def create_record_page():
                     ])
                 ], className="mb-4"),
                 
-                # Device selection
+                # Device selection (collapsible, open by default)
                 dbc.Card([
-                    dbc.CardHeader("Devices"),
-                    dbc.CardBody([
-                        dbc.Row([
-                            dbc.Col([
-                                dbc.Label("Camera"),
-                                dcc.Dropdown(
-                                    id="camera-select",
-                                    options=camera_options,
-                                    value=camera_options[0]["value"] if camera_options else None,
-                                    clearable=False
-                                ),
-                            ], md=6),
-                            dbc.Col([
-                                dbc.Label("Audio Input"),
-                                dcc.Dropdown(
-                                    id="audio-select",
-                                    options=audio_options,
-                                    value=audio_options[0]["value"] if audio_options else None,
-                                    clearable=False
-                                ),
-                            ], md=6),
+                    dbc.CardHeader(
+                        dbc.Button(
+                            "▼ Recording Devices",
+                            id="collapse-devices-btn",
+                            color="link",
+                            className="p-0 text-decoration-none"
+                        )
+                    ),
+                    dbc.Collapse(
+                        dbc.CardBody([
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Camera"),
+                                    dcc.Dropdown(
+                                        id="camera-select",
+                                        options=camera_options,
+                                        value=camera_options[0]["value"] if camera_options else None,
+                                        clearable=False
+                                    ),
+                                ], md=6),
+                                dbc.Col([
+                                    dbc.Label("Audio Input"),
+                                    dcc.Dropdown(
+                                        id="audio-select",
+                                        options=audio_options,
+                                        value=audio_options[0]["value"] if audio_options else None,
+                                        clearable=False
+                                    ),
+                                ], md=6),
+                            ]),
+                            dbc.Button("🔄 Refresh Devices", id="btn-refresh-devices", 
+                                       color="link", size="sm", className="mt-2"),
                         ]),
-                        dbc.Button("🔄 Refresh Devices", id="btn-refresh-devices", 
-                                   color="link", size="sm", className="mt-2"),
-                    ])
+                        id="collapse-devices",
+                        is_open=True
+                    ),
                 ], className="mb-4"),
                 
                 # Recording controls
                 dbc.Card([
-                    dbc.CardHeader("Recording"),
+                    dbc.CardHeader("Recording (Optional)"),
                     dbc.CardBody([
                         dbc.Row([
                             dbc.Col([
@@ -625,9 +725,9 @@ def create_record_page():
                             type="default",
                             children=[
                                 dbc.ButtonGroup([
-                                    dbc.Button("▶ Start Recording", id="btn-start-record", color="success", size="lg"),
+                                    dbc.Button("⏺ Start Recording", id="btn-start-record", color="danger", size="lg"),
                                     dbc.Button("⏹ Stop & Save", id="btn-stop-record", color="primary", size="lg", disabled=True),
-                                    dbc.Button("🗑 Stop & Discard", id="btn-stop-discard", color="danger", size="lg", disabled=True),
+                                    dbc.Button("🗑 Stop & Discard", id="btn-stop-discard", color="secondary", size="lg", disabled=True),
                                 ], className="w-100"),
                                 
                                 # Status message
@@ -673,16 +773,31 @@ def create_record_page():
                 ]),
             ], lg=8),
             
+            # Sidebar
             dbc.Col([
-                # Quick stats sidebar
+                # Today's Practice checklist
                 dbc.Card([
-                    dbc.CardHeader("Today's Practice"),
-                    dbc.CardBody(id="today-stats"),
+                    dbc.CardHeader([
+                        "Today's Practice",
+                        dbc.Badge(
+                            f"{len([e for e in today_exercises if e['completed']])}/{len(today_exercises)}",
+                            color="success" if all(e["completed"] for e in today_exercises) and today_exercises else "primary",
+                            className="ms-2"
+                        ) if today_exercises else None
+                    ]),
+                    dbc.CardBody(today_checklist, id="practice-today-checklist"),
                 ], className="mb-4"),
                 
+                # Quick links
                 dbc.Card([
-                    dbc.CardHeader("Active Goals"),
-                    dbc.CardBody(id="sidebar-goals"),
+                    dbc.CardHeader("Quick Links"),
+                    dbc.CardBody([
+                        dbc.Nav([
+                            dbc.NavItem(dbc.NavLink("📅 Weekly Planner", href="/planner")),
+                            dbc.NavItem(dbc.NavLink("🎵 Repertoire", href="/repertoire")),
+                            dbc.NavItem(dbc.NavLink("🔍 Review Recordings", href="/review")),
+                        ], vertical=True, pills=True)
+                    ])
                 ]),
             ], lg=4),
         ]),
@@ -690,11 +805,20 @@ def create_record_page():
         # Interval for timer updates
         dcc.Interval(id="timer-interval", interval=1000, disabled=True),
         
+        # Interval for practice timer
+        dcc.Interval(id="practice-timer-interval", interval=1000, disabled=True),
+        
         # Store for recording state
         dcc.Store(id="recording-state", data={"is_recording": False, "start_time": None, "result": None}),
         
+        # Store for practice timer state
+        dcc.Store(id="practice-timer-state", data={"running": False, "remaining_seconds": 300, "duration_seconds": 300, "last_tick": None}),
+        
         # Store for device selections
         dcc.Store(id="device-state", data={"camera": 0, "audio": None}),
+        
+        # Store plan ID for checklist updates
+        dcc.Store(id="practice-plan-id", data=plan_id),
     ])
 
 
@@ -1171,6 +1295,175 @@ def delete_piece(n_clicks_list, ids):
     return "/repertoire"  # Refresh page
 
 
+# --- Practice Page callbacks ---
+
+@callback(
+    Output("collapse-devices", "is_open"),
+    Output("collapse-devices-btn", "children"),
+    Input("collapse-devices-btn", "n_clicks"),
+    State("collapse-devices", "is_open"),
+    prevent_initial_call=True
+)
+def toggle_devices_collapse(n_clicks, is_open):
+    """Toggle the devices section collapse"""
+    new_state = not is_open
+    icon = "▼" if new_state else "▶"
+    return new_state, f"{icon} Recording Devices"
+
+
+@callback(
+    Output("timer-duration-input", "value"),
+    Input("btn-timer-minus", "n_clicks"),
+    Input("btn-timer-plus", "n_clicks"),
+    State("timer-duration-input", "value"),
+    prevent_initial_call=True
+)
+def adjust_timer_duration(minus_clicks, plus_clicks, current_value):
+    """Adjust timer duration with +/- buttons"""
+    if current_value is None:
+        current_value = 5
+    
+    triggered = ctx.triggered_id
+    if triggered == "btn-timer-minus":
+        return max(1, current_value - 1)
+    elif triggered == "btn-timer-plus":
+        return min(120, current_value + 1)
+    return current_value
+
+
+@callback(
+    Output("practice-timer-display", "children"),
+    Output("practice-timer-display", "style"),
+    Output("practice-timer-state", "data"),
+    Output("btn-timer-start", "disabled"),
+    Output("btn-timer-pause", "disabled"),
+    Output("btn-timer-start", "children"),
+    Output("practice-timer-interval", "disabled"),
+    Input("btn-timer-start", "n_clicks"),
+    Input("btn-timer-pause", "n_clicks"),
+    Input("btn-timer-reset", "n_clicks"),
+    Input("practice-timer-interval", "n_intervals"),
+    Input("timer-duration-input", "value"),
+    Input("btn-start-record", "n_clicks"),
+    Input("btn-stop-record", "n_clicks"),
+    Input("btn-stop-discard", "n_clicks"),
+    State("practice-timer-state", "data"),
+    State("timer-sync-recording", "value"),
+    prevent_initial_call=True
+)
+def handle_practice_timer(start_clicks, pause_clicks, reset_clicks, n_intervals,
+                          duration_input, rec_start, rec_stop, rec_discard,
+                          timer_state, sync_options):
+    """Handle countdown timer with optional sync to recording"""
+    import time
+    
+    triggered = ctx.triggered_id
+    sync_with_recording = "sync" in (sync_options or [])
+    
+    # Default state
+    if timer_state is None:
+        timer_state = {
+            "running": False, 
+            "remaining_seconds": (duration_input or 5) * 60,
+            "duration_seconds": (duration_input or 5) * 60,
+            "last_tick": None
+        }
+    
+    running = timer_state.get("running", False)
+    remaining = timer_state.get("remaining_seconds", 300)
+    duration = timer_state.get("duration_seconds", 300)
+    last_tick = timer_state.get("last_tick")
+    
+    # Handle duration input change (reset timer to new duration)
+    if triggered == "timer-duration-input":
+        new_duration = (duration_input or 5) * 60
+        return (
+            f"{duration_input or 5:02d}:00",
+            {},
+            {"running": False, "remaining_seconds": new_duration, "duration_seconds": new_duration, "last_tick": None},
+            False,  # start enabled
+            True,   # pause disabled
+            "▶ Start",
+            True    # interval disabled
+        )
+    
+    # Handle recording sync
+    if sync_with_recording:
+        if triggered == "btn-start-record":
+            running = True
+            last_tick = time.time()
+        elif triggered in ["btn-stop-record", "btn-stop-discard"]:
+            running = False
+            last_tick = None
+    
+    # Handle timer buttons
+    if triggered == "btn-timer-start":
+        if not running and remaining > 0:
+            running = True
+            last_tick = time.time()
+    elif triggered == "btn-timer-pause":
+        running = False
+        last_tick = None
+    elif triggered == "btn-timer-reset":
+        running = False
+        remaining = duration
+        last_tick = None
+    
+    # Update remaining time on interval tick
+    if triggered == "practice-timer-interval" and running and last_tick:
+        now = time.time()
+        elapsed_since_tick = now - last_tick
+        remaining = max(0, remaining - elapsed_since_tick)
+        last_tick = now
+        
+        # Auto-stop when timer reaches zero
+        if remaining <= 0:
+            running = False
+            remaining = 0
+            last_tick = None
+    
+    # Format display
+    mins = int(remaining // 60)
+    secs = int(remaining % 60)
+    display = f"{mins:02d}:{secs:02d}"
+    
+    # Style - flash red when time's up
+    style = {"color": "#dc3545"} if remaining == 0 else {}
+    
+    # Button states
+    start_disabled = running or remaining == 0
+    pause_disabled = not running
+    if remaining == 0:
+        start_text = "✓ Done"
+    elif remaining < duration and not running:
+        start_text = "▶ Resume"
+    else:
+        start_text = "▶ Start"
+    interval_disabled = not running
+    
+    new_state = {
+        "running": running,
+        "remaining_seconds": remaining,
+        "duration_seconds": duration,
+        "last_tick": last_tick
+    }
+    
+    return display, style, new_state, start_disabled, pause_disabled, start_text, interval_disabled
+
+
+@callback(
+    Output({"type": "practice-complete", "entry": MATCH}, "value"),
+    Input({"type": "practice-complete", "entry": MATCH}, "value"),
+    State({"type": "practice-complete", "entry": MATCH}, "id"),
+    prevent_initial_call=True
+)
+def handle_practice_complete(value, id_dict):
+    """Handle completion checkbox for today's exercises on Practice page"""
+    entry_id = id_dict["entry"]
+    toggle_entry_completed(entry_id, value)
+    return value
+
+
 # --- Recording callbacks ---
 
 @callback(
@@ -1468,35 +1761,6 @@ def save_session(n_clicks, title, category, description, notes, rating, state):
         {"display": "none"},
         {"is_recording": False, "start_time": None, "result": None}
     )
-
-
-@callback(
-    Output("today-stats", "children"),
-    Input("url", "pathname"),
-    Input("btn-save-session", "n_clicks")
-)
-def update_today_stats(pathname, n):
-    today = date.today()
-    stats = get_practice_stats(today, today)
-    
-    return html.Div([
-        html.P(f"Sessions: {stats['total_sessions']}", className="mb-1"),
-        html.P(f"Total time: {stats['total_minutes']} min", className="mb-1"),
-    ])
-
-
-@callback(
-    Output("sidebar-goals", "children"),
-    Input("url", "pathname")
-)
-def update_sidebar_goals(pathname):
-    goals = get_active_goals()
-    if not goals:
-        return html.P("No active goals", className="text-muted")
-    
-    return html.Ul([
-        html.Li(g.title, className="mb-1") for g in goals[:5]
-    ], className="mb-0 ps-3")
 
 
 # --- Journal callbacks ---
