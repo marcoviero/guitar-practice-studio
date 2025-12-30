@@ -589,54 +589,7 @@ def create_record_page():
         dbc.Row([
             # Main content area
             dbc.Col([
-                html.H3("Practice Session", className="mb-4"),
-                
-                # Practice Timer Card (countdown)
-                dbc.Card([
-                    dbc.CardHeader([
-                        html.Span("Practice Timer", className="me-auto"),
-                        dbc.Checklist(
-                            id="timer-sync-recording",
-                            options=[{"label": " Sync with recording", "value": "sync"}],
-                            value=[],
-                            inline=True,
-                            className="ms-2 small"
-                        ),
-                    ], className="d-flex align-items-center"),
-                    dbc.CardBody([
-                        # Timer duration setting
-                        dbc.Row([
-                            dbc.Col([
-                                html.Div([
-                                    dbc.Button("−", id="btn-timer-minus", color="secondary", 
-                                              outline=True, size="sm", className="me-2"),
-                                    dbc.Input(
-                                        id="timer-duration-input",
-                                        type="number",
-                                        value=5,
-                                        min=1,
-                                        max=120,
-                                        style={"width": "70px", "display": "inline-block", "textAlign": "center"}
-                                    ),
-                                    html.Span(" min", className="ms-1 me-2"),
-                                    dbc.Button("+", id="btn-timer-plus", color="secondary", 
-                                              outline=True, size="sm"),
-                                ], className="d-flex align-items-center justify-content-center mb-3")
-                            ])
-                        ]),
-                        # Timer display
-                        html.Div(
-                            id="practice-timer-display",
-                            className="display-3 text-center font-monospace mb-3",
-                            children="05:00"
-                        ),
-                        dbc.ButtonGroup([
-                            dbc.Button("▶ Start", id="btn-timer-start", color="success", outline=True),
-                            dbc.Button("⏸ Pause", id="btn-timer-pause", color="warning", outline=True, disabled=True),
-                            dbc.Button("⏹ Reset", id="btn-timer-reset", color="secondary", outline=True),
-                        ], className="w-100"),
-                    ])
-                ], className="mb-4"),
+                #html.H3("Practice Session", className="mb-4"),
                 
                 # Session info form
                 dbc.Card([
@@ -656,55 +609,52 @@ def create_record_page():
                                 ),
                             ], md=6),
                         ], className="mb-3"),
-                        dbc.Label("Description (optional)"),
-                        dbc.Textarea(id="record-description", placeholder="Notes about what you're practicing..."),
+                        #dbc.Label("Description (optional)"),
+                        #dbc.Textarea(id="record-description", placeholder="Notes about what you're practicing..."),
                     ])
                 ], className="mb-4"),
-                
-                # Device selection (collapsible, open by default)
-                dbc.Card([
-                    dbc.CardHeader(
-                        dbc.Button(
-                            "▼ Recording Devices",
-                            id="collapse-devices-btn",
-                            color="link",
-                            className="p-0 text-decoration-none"
-                        )
-                    ),
-                    dbc.Collapse(
-                        dbc.CardBody([
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Label("Camera"),
-                                    dcc.Dropdown(
-                                        id="camera-select",
-                                        options=camera_options,
-                                        value=camera_options[0]["value"] if camera_options else None,
-                                        clearable=False
-                                    ),
-                                ], md=6),
-                                dbc.Col([
-                                    dbc.Label("Audio Input"),
-                                    dcc.Dropdown(
-                                        id="audio-select",
-                                        options=audio_options,
-                                        value=audio_options[0]["value"] if audio_options else None,
-                                        clearable=False
-                                    ),
-                                ], md=6),
-                            ]),
-                            dbc.Button("🔄 Refresh Devices", id="btn-refresh-devices", 
-                                       color="link", size="sm", className="mt-2"),
-                        ]),
-                        id="collapse-devices",
-                        is_open=True
-                    ),
-                ], className="mb-4"),
-                
+
                 # Recording controls
                 dbc.Card([
-                    dbc.CardHeader("Recording (Optional)"),
+                    dbc.CardHeader("Recording"),
+                    # Device selection (collapsible, open by default)
                     dbc.CardBody([
+                        dbc.CardHeader(
+                            dbc.Button(
+                                "▼ Recording Devices",
+                                id="collapse-devices-btn",
+                                color="link",
+                                className="p-0 text-decoration-none"
+                            )
+                        ),
+                        dbc.Collapse(
+                            dbc.CardBody([
+                                dbc.Row([
+                                    dbc.Col([
+                                        dbc.Label("Camera"),
+                                        dcc.Dropdown(
+                                            id="camera-select",
+                                            options=camera_options,
+                                            value=camera_options[0]["value"] if camera_options else None,
+                                            clearable=False
+                                        ),
+                                    ], md=6),
+                                    dbc.Col([
+                                        dbc.Label("Audio Input"),
+                                        dcc.Dropdown(
+                                            id="audio-select",
+                                            options=audio_options,
+                                            value=audio_options[0]["value"] if audio_options else None,
+                                            clearable=False
+                                        ),
+                                    ], md=6),
+                                ]),
+                                dbc.Button("🔄 Refresh Devices", id="btn-refresh-devices",
+                                           color="link", size="sm", className="mt-2"),
+                            ]),
+                            id="collapse-devices",
+                            is_open=True
+                        ),
                         dbc.Row([
                             dbc.Col([
                                 dbc.Checklist(
@@ -738,7 +688,7 @@ def create_record_page():
                         ),
                     ])
                 ], className="mb-4"),
-                
+
                 # Post-recording form (appears after stopping)
                 html.Div(id="post-record-form", style={"display": "none"}, children=[
                     dbc.Card([
@@ -789,18 +739,53 @@ def create_record_page():
                     ]),
                     dbc.CardBody(today_checklist, id="practice-today-checklist"),
                 ], className="mb-4"),
-                
-                # Quick links
+
+                # Practice Timer Card (countdown)
                 dbc.Card([
-                    dbc.CardHeader("Quick Links"),
+                    dbc.CardHeader([
+                        html.Span("Practice Timer", className="me-auto"),
+                        dbc.Checklist(
+                            id="timer-sync-recording",
+                            options=[{"label": " Sync with recording", "value": "sync"}],
+                            value=[],
+                            inline=True,
+                            className="ms-2 small"
+                        ),
+                    ], className="d-flex align-items-center"),
                     dbc.CardBody([
-                        dbc.Nav([
-                            dbc.NavItem(dbc.NavLink("📅 Weekly Planner", href="/planner")),
-                            dbc.NavItem(dbc.NavLink("🎵 Repertoire", href="/repertoire")),
-                            dbc.NavItem(dbc.NavLink("🔍 Review Recordings", href="/review")),
-                        ], vertical=True, pills=True)
+                        # Timer duration setting
+                        dbc.Row([
+                            dbc.Col([
+                                html.Div([
+                                    dbc.Button("−", id="btn-timer-minus", color="secondary",
+                                               outline=True, size="sm", className="me-2"),
+                                    dbc.Input(
+                                        id="timer-duration-input",
+                                        type="number",
+                                        value=5,
+                                        min=1,
+                                        max=120,
+                                        style={"width": "70px", "display": "inline-block", "textAlign": "center"}
+                                    ),
+                                    html.Span(" min", className="ms-1 me-2"),
+                                    dbc.Button("+", id="btn-timer-plus", color="secondary",
+                                               outline=True, size="sm"),
+                                ], className="d-flex align-items-center justify-content-center mb-3")
+                            ])
+                        ]),
+                        # Timer display
+                        html.Div(
+                            id="practice-timer-display",
+                            className="display-3 text-center font-monospace mb-3",
+                            children="05:00"
+                        ),
+                        dbc.ButtonGroup([
+                            dbc.Button("▶ Start", id="btn-timer-start", color="success", outline=True),
+                            dbc.Button("⏸ Pause", id="btn-timer-pause", color="warning", outline=True, disabled=True),
+                            dbc.Button("⏹ Reset", id="btn-timer-reset", color="secondary", outline=True),
+                        ], className="w-100"),
                     ])
-                ]),
+                ], className="mb-4"),
             ], lg=4),
         ]),
         
@@ -1152,55 +1137,6 @@ def create_review_page():
         
         # Interval for updating current time display (disabled until we need it)
         dcc.Interval(id="review-time-interval", interval=500, disabled=True, n_intervals=0),
-    ])
-
-
-def create_goals_page():
-    """Goals management"""
-    return dbc.Container([
-        html.H3("Practice Goals", className="mb-4"),
-        
-        dbc.Row([
-            dbc.Col([
-                # Active goals
-                html.H5("Active Goals"),
-                html.Div(id="goals-active-list"),
-            ], lg=8),
-            
-            dbc.Col([
-                # Add new goal
-                dbc.Card([
-                    dbc.CardHeader("New Goal"),
-                    dbc.CardBody([
-                        dbc.Label("Goal"),
-                        dbc.Input(id="goal-title", placeholder="e.g., Learn Clair de Lune", className="mb-2"),
-                        dbc.Label("Category"),
-                        dcc.Dropdown(
-                            id="goal-category",
-                            options=[{"label": c, "value": c} for c in PRACTICE_CATEGORIES],
-                            className="mb-2"
-                        ),
-                        dbc.Label("Type"),
-                        dcc.Dropdown(
-                            id="goal-type",
-                            options=[
-                                {"label": "Weekly", "value": "weekly"},
-                                {"label": "Monthly", "value": "monthly"},
-                                {"label": "Ongoing", "value": "ongoing"},
-                            ],
-                            value="weekly",
-                            className="mb-2"
-                        ),
-                        dbc.Label("Target Minutes (optional)"),
-                        dbc.Input(id="goal-target-minutes", type="number", min=0, className="mb-2"),
-                        dbc.Label("Description"),
-                        dbc.Textarea(id="goal-description", className="mb-2"),
-                        dbc.Button("Add Goal", id="btn-add-goal", color="primary"),
-                        html.Div(id="goal-status", className="mt-2"),
-                    ])
-                ])
-            ], lg=4),
-        ])
     ])
 
 
