@@ -34,10 +34,66 @@ playback = PlaybackController()
 # Create Dash app with Bootstrap theme
 app = dash.Dash(
     __name__,
-    external_stylesheets=[dbc.themes.FLATLY],
+    external_stylesheets=[dbc.themes.DARKLY],  # Dark mode
     suppress_callback_exceptions=True
 )
 app.title = "Guitar Practice Studio"
+
+# Custom CSS for dark mode dropdowns
+app.index_string = '''
+<!DOCTYPE html>
+<html>
+    <head>
+        {%metas%}
+        <title>{%title%}</title>
+        {%favicon%}
+        {%css%}
+        <style>
+            /* Dark mode dropdown fixes */
+            .Select-control, .Select-menu-outer {
+                background-color: #303030 !important;
+                color: #fff !important;
+            }
+            .Select-value-label, .Select-input input, .Select-placeholder {
+                color: #fff !important;
+            }
+            .Select-option {
+                background-color: #303030 !important;
+                color: #fff !important;
+            }
+            .Select-option:hover, .Select-option.is-focused {
+                background-color: #444 !important;
+            }
+            .Select-option.is-selected {
+                background-color: #375a7f !important;
+            }
+            /* Dash dropdown specific */
+            .dash-dropdown .Select-control {
+                background-color: #303030 !important;
+                border-color: #444 !important;
+            }
+            .dash-dropdown .Select-menu {
+                background-color: #303030 !important;
+            }
+            .VirtualizedSelectOption {
+                background-color: #303030 !important;
+                color: #fff !important;
+            }
+            .VirtualizedSelectFocusedOption {
+                background-color: #444 !important;
+            }
+        </style>
+    </head>
+    <body>
+        {%app_entry%}
+        <footer>
+            {%config%}
+            {%scripts%}
+            {%renderer%}
+        </footer>
+    </body>
+</html>
+'''
 
 # ============================================================================
 # LAYOUT COMPONENTS
@@ -155,13 +211,20 @@ def create_record_page():
                             ], md=4),
                         ], className="mb-3"),
                         
-                        dbc.ButtonGroup([
-                            dbc.Button("▶ Start Recording", id="btn-start-record", color="success", size="lg"),
-                            dbc.Button("⏹ Stop & Save", id="btn-stop-record", color="danger", size="lg", disabled=True),
-                        ], className="w-100"),
-                        
-                        # Status message
-                        html.Div(id="record-status", className="mt-3 text-center"),
+                        dcc.Loading(
+                            id="loading-record",
+                            type="default",
+                            children=[
+                                dbc.ButtonGroup([
+                                    dbc.Button("▶ Start Recording", id="btn-start-record", color="success", size="lg"),
+                                    dbc.Button("⏹ Stop & Save", id="btn-stop-record", color="primary", size="lg", disabled=True),
+                                    dbc.Button("🗑 Stop & Discard", id="btn-stop-discard", color="danger", size="lg", disabled=True),
+                                ], className="w-100"),
+                                
+                                # Status message
+                                html.Div(id="record-status", className="mt-3 text-center"),
+                            ]
+                        ),
                     ])
                 ], className="mb-4"),
                 
@@ -506,11 +569,13 @@ def display_page(pathname):
     Output("recording-state", "data"),
     Output("btn-start-record", "disabled"),
     Output("btn-stop-record", "disabled"),
+    Output("btn-stop-discard", "disabled"),
     Output("record-status", "children"),
     Output("post-record-form", "style"),
     Output("recording-preview", "children"),
     Input("btn-start-record", "n_clicks"),
     Input("btn-stop-record", "n_clicks"),
+    Input("btn-stop-discard", "n_clicks"),
     Input("btn-discard-retry", "n_clicks"),
     Input("btn-discard", "n_clicks"),
     State("record-options", "value"),
@@ -519,7 +584,7 @@ def display_page(pathname):
     State("audio-select", "value"),
     prevent_initial_call=True
 )
-def handle_recording(start_clicks, stop_clicks, retry_clicks, discard_clicks, 
+def handle_recording(start_clicks, stop_clicks, stop_discard_clicks, retry_clicks, discard_clicks, 
                      options, state, camera_idx, audio_idx):
     triggered = ctx.triggered_id
     
@@ -537,8 +602,9 @@ def handle_recording(start_clicks, stop_clicks, retry_clicks, discard_clicks,
         
         return (
             {"is_recording": True, "start_time": datetime.now().isoformat(), "result": None},
-            True,  # disable start
+            True,   # disable start
             False,  # enable stop
+            False,  # enable stop & discard
             dbc.Alert("🔴 Recording...", color="danger"),
             {"display": "none"},
             None
@@ -590,10 +656,26 @@ def handle_recording(start_clicks, stop_clicks, retry_clicks, discard_clicks,
         return (
             {"is_recording": False, "start_time": None, "result": result},
             False,  # enable start
-            True,  # disable stop
+            True,   # disable stop
+            True,   # disable stop & discard
             dbc.Alert(f"Recording complete: {result['duration_seconds']:.1f}s — Review below", color="success") if result else dbc.Alert("Recording failed", color="danger"),
             {"display": "block"},
             preview
+        )
+    
+    elif triggered == "btn-stop-discard":
+        # Stop recording and discard immediately
+        result = recorder.stop()
+        _delete_recording_files(result)
+        
+        return (
+            {"is_recording": False, "start_time": None, "result": None},
+            False,  # enable start
+            True,   # disable stop
+            True,   # disable stop & discard
+            dbc.Alert("Recording discarded", color="secondary"),
+            {"display": "none"},
+            None
         )
     
     elif triggered == "btn-discard-retry":
@@ -613,8 +695,9 @@ def handle_recording(start_clicks, stop_clicks, retry_clicks, discard_clicks,
         
         return (
             {"is_recording": True, "start_time": datetime.now().isoformat(), "result": None},
-            True,
-            False,
+            True,   # disable start
+            False,  # enable stop
+            False,  # enable stop & discard
             dbc.Alert("🔴 Recording... (previous take discarded)", color="danger"),
             {"display": "none"},
             None
@@ -627,14 +710,15 @@ def handle_recording(start_clicks, stop_clicks, retry_clicks, discard_clicks,
         
         return (
             {"is_recording": False, "start_time": None, "result": None},
-            False,
-            True,
+            False,  # enable start
+            True,   # disable stop
+            True,   # disable stop & discard
             dbc.Alert("Recording discarded", color="secondary"),
             {"display": "none"},
             None
         )
     
-    return dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    return (dash.no_update,) * 7
 
 
 def _delete_recording_files(result):
@@ -1703,6 +1787,18 @@ def main():
     print(f"   Audio available: {AUDIO_AVAILABLE}")
     print(f"   Video available: {VIDEO_AVAILABLE}")
     print(f"   Data directory: {RECORDINGS_DIR.parent}")
+    
+    # Show detected devices
+    print("   Detecting devices...")
+    cameras = recorder.get_available_cameras()
+    audio_devs = recorder.get_available_audio_devices()
+    print(f"   Cameras: {len(cameras)}")
+    for c in cameras:
+        print(f"      [{c['index']}] {c['name']}")
+    print(f"   Audio inputs: {len(audio_devs)}")
+    for a in audio_devs:
+        print(f"      [{a['index']}] {a['name']}")
+    
     print(f"   Starting server at http://{HOST}:{PORT}")
     
     app.run(debug=DEBUG, host=HOST, port=PORT)

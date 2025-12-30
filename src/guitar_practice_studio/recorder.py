@@ -4,9 +4,11 @@ Uses sounddevice for audio (clean quality) and OpenCV for video,
 then muxes with ffmpeg using timestamp alignment for sync.
 """
 import os
+import re
 import time
 import threading
 import subprocess
+import platform
 from datetime import datetime
 from pathlib import Path
 from typing import Optional, Callable
@@ -72,17 +74,45 @@ class Recorder:
         return datetime.now().strftime("%Y%m%d_%H%M%S")
     
     def get_available_cameras(self) -> list:
-        """List cameras using OpenCV (matches what we record with)"""
+        """List cameras - use ffmpeg on macOS for proper names"""
         cameras = []
         
-        if VIDEO_AVAILABLE:
+        # On macOS, use ffmpeg to get proper device names
+        if platform.system() == "Darwin" and FFMPEG_AVAILABLE:
+            try:
+                result = subprocess.run(
+                    ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+                    capture_output=True, text=True, timeout=5
+                )
+                lines = result.stderr.split('\n')
+                in_video = False
+                for line in lines:
+                    if "AVFoundation video devices:" in line:
+                        in_video = True
+                        continue
+                    if "AVFoundation audio devices:" in line:
+                        break
+                    # Look for lines containing device indices like [0], [1], etc
+                    if in_video:
+                        # Match pattern: [AVFoundation ...] [0] Device Name
+                        match = re.search(r'\]\s*\[(\d+)\]\s*(.+)$', line)
+                        if match:
+                            idx = int(match.group(1))
+                            name = match.group(2).strip()
+                            cameras.append({"index": idx, "name": name})
+                            print(f"  Found camera [{idx}]: {name}")
+            except Exception as e:
+                print(f"Error listing cameras: {e}")
+        
+        # Fallback to OpenCV (less descriptive names)
+        if not cameras and VIDEO_AVAILABLE:
+            print("  Using OpenCV fallback for camera detection")
             for i in range(10):
                 cap = cv2.VideoCapture(i)
                 if cap.isOpened():
                     w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
                     h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    backend = cap.getBackendName()
-                    cameras.append({"index": i, "name": f"Camera {i}: {backend} ({w}x{h})"})
+                    cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
                     cap.release()
         
         return cameras
@@ -144,7 +174,12 @@ class Recorder:
     
     def _record_video(self):
         """Record video using OpenCV"""
-        cap = cv2.VideoCapture(self.camera_index)
+        # On macOS, explicitly use AVFoundation backend for consistent indexing with ffmpeg
+        if platform.system() == "Darwin":
+            cap = cv2.VideoCapture(self.camera_index, cv2.CAP_AVFOUNDATION)
+        else:
+            cap = cv2.VideoCapture(self.camera_index)
+        
         if not cap.isOpened():
             print(f"Cannot open camera {self.camera_index}")
             return
