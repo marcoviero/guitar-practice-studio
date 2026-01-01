@@ -99,7 +99,7 @@ class Exercise(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
-    category = Column(String(50), nullable=False)  # Technique, Chord Perfect, Songs, Ear Training, Theory, Transcribing
+    category = Column(String(50), nullable=False)  # Technique, Knowledge, Songs, Ear Training, Time/Rythm, Improvisation
     description = Column(Text)
     default_duration_minutes = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)  # Can hide exercises without deleting
@@ -356,21 +356,21 @@ def get_practice_stats(start: date, end: date) -> dict:
 
 PRACTICE_CATEGORIES = [
     "Technique",
-    "Chord Perfect",
+    "Knowledge",
     "Songs",
     "Ear Training",
-    "Theory",
-    "Transcribing"
+    "Time/Rythm",
+    "Improvisation"
 ]
 
 # Category targets (default, can be overridden by TOML)
 CATEGORY_TARGETS = {
     "Technique": 15,
-    "Chord Perfect": 10,
+    "Knowledge": 10,
     "Songs": 20,
     "Ear Training": 10,
-    "Theory": 10,
-    "Transcribing": 15,
+    "Time/Rythm": 10,
+    "Improvisation": 20,
 }
 
 
@@ -427,11 +427,11 @@ def init_default_exercises():
         # Fallback defaults
         exercises_data = [
             {"name": "Spider Exercise", "category": "Technique", "duration": 5},
-            {"name": "One Minute Changes", "category": "Chord Perfect", "duration": 5},
+            {"name": "Fretboard Notes", "category": "Knowledge", "duration": 5},
             {"name": "New Piece - Learning", "category": "Songs", "duration": 15},
             {"name": "Interval Recognition", "category": "Ear Training", "duration": 5},
-            {"name": "Fretboard Notes", "category": "Theory", "duration": 5},
-            {"name": "Transcribe Melody", "category": "Transcribing", "duration": 10},
+            {"name": "Metronome", "category": "Time/Rythm", "duration": 5},
+            {"name": "Looper Pedal", "category": "Improvisation", "duration": 10},
         ]
         print("Using default exercises (exercises.toml not found)")
     

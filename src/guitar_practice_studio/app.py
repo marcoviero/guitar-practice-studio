@@ -609,8 +609,6 @@ def create_record_page():
                                 ),
                             ], md=6),
                         ], className="mb-3"),
-                        #dbc.Label("Description (optional)"),
-                        #dbc.Textarea(id="record-description", placeholder="Notes about what you're practicing..."),
                     ])
                 ], className="mb-4"),
 

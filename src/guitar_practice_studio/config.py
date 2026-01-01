@@ -30,11 +30,11 @@ DEFAULT_CAMERA_INDEX = 0  # Usually 0 for primary USB camera
 # Practice categories (Sandercoe-inspired structure)
 PRACTICE_CATEGORIES = [
     "Technique",
-    "Chord Perfect",
+    "Knowledge",
     "Songs",
     "Ear Training",
-    "Theory",
-    "Transcribing",
+    "Time/Rythm",
+    "Improvisation",
 ]
 
 # Dash app settings
