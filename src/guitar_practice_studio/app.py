@@ -106,6 +106,7 @@ app.index_string = '''
                 border-color: #375a7f !important;
             }
         </style>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
     </head>
     <body>
         {%app_entry%}
@@ -1521,19 +1522,20 @@ app.clientside_callback(
 
 
 # ============================================================================
-# DRUM MACHINE CLIENTSIDE CALLBACK
+# DRUM MACHINE CLIENTSIDE CALLBACK (Tone.js)
 # ============================================================================
 
 app.clientside_callback(
     """
     function(playClicks, stopClicks, pattern, bpm, volume, countIn) {
-        // Initialize drum machine on window if not exists
+        // Initialize drum machine with Tone.js
         if (!window.drumMachine) {
             window.drumMachine = {
-                audioCtx: null,
+                initialized: false,
                 playing: false,
                 currentBeat: 0,
-                intervalId: null,
+                loopId: null,
+                synths: {},
                 
                 // Drum patterns - extensible for future custom editor
                 patterns: {
@@ -1574,9 +1576,10 @@ app.clientside_callback(
                         beats: 12,
                         kick:   [1,0,0,0,0,0,1,0,0,0,0,0],
                         snare:  [0,0,0,0,0,0,0,0,0,0,0,0],
-                        hihat:  [1,0,1,1,0,1,1,0,1,1,0,1],
+                        hihat:  [0,0,0,0,0,0,0,0,0,0,0,0],
                         accent: [1,0,0,0,0,0,0,0,0,0,0,0],
-                        ride:   [1,0,1,1,0,1,1,0,1,1,0,1]
+                        ride:   [1,0,1,1,0,1,1,0,1,1,0,1],
+                        brush:  [0,0,0,1,0,0,0,0,0,1,0,0]
                     },
                     bossa: {
                         name: "Bossa Nova",
@@ -1597,137 +1600,187 @@ app.clientside_callback(
                     }
                 },
                 
-                initAudio: function() {
-                    if (!this.audioCtx) {
-                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                    }
-                    if (this.audioCtx.state === 'suspended') {
-                        this.audioCtx.resume();
+                initSynths: function() {
+                    if (this.initialized) return;
+                    
+                    // Kick drum - punchy membrane synth
+                    this.synths.kick = new Tone.MembraneSynth({
+                        pitchDecay: 0.05,
+                        octaves: 6,
+                        oscillator: { type: 'sine' },
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.3,
+                            sustain: 0.01,
+                            release: 0.5,
+                            attackCurve: 'exponential'
+                        }
+                    }).toDestination();
+                    
+                    // Snare drum - noise + membrane combo
+                    this.synths.snareNoise = new Tone.NoiseSynth({
+                        noise: { type: 'white' },
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.15,
+                            sustain: 0,
+                            release: 0.1
+                        }
+                    }).toDestination();
+                    
+                    this.synths.snareTone = new Tone.MembraneSynth({
+                        pitchDecay: 0.008,
+                        octaves: 2,
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.1,
+                            sustain: 0,
+                            release: 0.1
+                        }
+                    }).toDestination();
+                    
+                    // Hi-hat - metallic noise
+                    this.synths.hihat = new Tone.MetalSynth({
+                        frequency: 250,
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.05,
+                            release: 0.01
+                        },
+                        harmonicity: 5.1,
+                        modulationIndex: 32,
+                        resonance: 4000,
+                        octaves: 1.5
+                    }).toDestination();
+                    
+                    // Open hi-hat - longer decay
+                    this.synths.hihatOpen = new Tone.MetalSynth({
+                        frequency: 250,
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.3,
+                            release: 0.1
+                        },
+                        harmonicity: 5.1,
+                        modulationIndex: 32,
+                        resonance: 4000,
+                        octaves: 1.5
+                    }).toDestination();
+                    
+                    // Ride cymbal - brighter, longer
+                    this.synths.ride = new Tone.MetalSynth({
+                        frequency: 300,
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.6,
+                            release: 0.2
+                        },
+                        harmonicity: 3.1,
+                        modulationIndex: 16,
+                        resonance: 5000,
+                        octaves: 1
+                    }).toDestination();
+                    
+                    // Rim shot - short, sharp
+                    this.synths.rim = new Tone.MembraneSynth({
+                        pitchDecay: 0.008,
+                        octaves: 1,
+                        oscillator: { type: 'square' },
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.03,
+                            sustain: 0,
+                            release: 0.01
+                        }
+                    }).toDestination();
+                    
+                    // Brush/cross-stick for jazz
+                    this.synths.brush = new Tone.NoiseSynth({
+                        noise: { type: 'pink' },
+                        envelope: {
+                            attack: 0.01,
+                            decay: 0.1,
+                            sustain: 0,
+                            release: 0.05
+                        }
+                    }).toDestination();
+                    
+                    // Click/accent for metronome
+                    this.synths.click = new Tone.Synth({
+                        oscillator: { type: 'sine' },
+                        envelope: {
+                            attack: 0.001,
+                            decay: 0.05,
+                            sustain: 0,
+                            release: 0.01
+                        }
+                    }).toDestination();
+                    
+                    this.initialized = true;
+                },
+                
+                setVolume: function(vol) {
+                    const db = Tone.gainToDb(vol / 100);
+                    for (const key in this.synths) {
+                        if (this.synths[key] && this.synths[key].volume) {
+                            this.synths[key].volume.value = db;
+                        }
                     }
                 },
                 
-                playSound: function(type, time, vol) {
-                    const ctx = this.audioCtx;
-                    const masterGain = ctx.createGain();
-                    masterGain.gain.value = vol;
-                    masterGain.connect(ctx.destination);
-                    
-                    if (type === 'kick') {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.type = 'sine';
-                        osc.frequency.setValueAtTime(150, time);
-                        osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
-                        gain.gain.setValueAtTime(1, time);
-                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
-                        osc.connect(gain);
-                        gain.connect(masterGain);
-                        osc.start(time);
-                        osc.stop(time + 0.15);
-                    }
-                    else if (type === 'snare') {
-                        // Noise burst for snare
-                        const bufferSize = ctx.sampleRate * 0.1;
-                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                        const data = buffer.getChannelData(0);
-                        for (let i = 0; i < bufferSize; i++) {
-                            data[i] = Math.random() * 2 - 1;
-                        }
-                        const noise = ctx.createBufferSource();
-                        noise.buffer = buffer;
-                        const noiseGain = ctx.createGain();
-                        noiseGain.gain.setValueAtTime(0.8, time);
-                        noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-                        // Add tone
-                        const osc = ctx.createOscillator();
-                        osc.type = 'triangle';
-                        osc.frequency.value = 180;
-                        const oscGain = ctx.createGain();
-                        oscGain.gain.setValueAtTime(0.5, time);
-                        oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
-                        noise.connect(noiseGain);
-                        osc.connect(oscGain);
-                        noiseGain.connect(masterGain);
-                        oscGain.connect(masterGain);
-                        noise.start(time);
-                        osc.start(time);
-                        osc.stop(time + 0.1);
-                    }
-                    else if (type === 'hihat') {
-                        const bufferSize = ctx.sampleRate * 0.05;
-                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                        const data = buffer.getChannelData(0);
-                        for (let i = 0; i < bufferSize; i++) {
-                            data[i] = Math.random() * 2 - 1;
-                        }
-                        const noise = ctx.createBufferSource();
-                        noise.buffer = buffer;
-                        const filter = ctx.createBiquadFilter();
-                        filter.type = 'highpass';
-                        filter.frequency.value = 7000;
-                        const gain = ctx.createGain();
-                        gain.gain.setValueAtTime(0.3, time);
-                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
-                        noise.connect(filter);
-                        filter.connect(gain);
-                        gain.connect(masterGain);
-                        noise.start(time);
-                    }
-                    else if (type === 'click' || type === 'accent') {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.type = 'sine';
-                        osc.frequency.value = type === 'accent' ? 1200 : 800;
-                        gain.gain.setValueAtTime(0.5, time);
-                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.03);
-                        osc.connect(gain);
-                        gain.connect(masterGain);
-                        osc.start(time);
-                        osc.stop(time + 0.03);
-                    }
-                    else if (type === 'rim') {
-                        const osc = ctx.createOscillator();
-                        const gain = ctx.createGain();
-                        osc.type = 'square';
-                        osc.frequency.value = 500;
-                        gain.gain.setValueAtTime(0.3, time);
-                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.02);
-                        osc.connect(gain);
-                        gain.connect(masterGain);
-                        osc.start(time);
-                        osc.stop(time + 0.02);
-                    }
-                    else if (type === 'ride') {
-                        const bufferSize = ctx.sampleRate * 0.3;
-                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-                        const data = buffer.getChannelData(0);
-                        for (let i = 0; i < bufferSize; i++) {
-                            data[i] = Math.random() * 2 - 1;
-                        }
-                        const noise = ctx.createBufferSource();
-                        noise.buffer = buffer;
-                        const filter = ctx.createBiquadFilter();
-                        filter.type = 'bandpass';
-                        filter.frequency.value = 5000;
-                        filter.Q.value = 2;
-                        const gain = ctx.createGain();
-                        gain.gain.setValueAtTime(0.2, time);
-                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
-                        noise.connect(filter);
-                        filter.connect(gain);
-                        gain.connect(masterGain);
-                        noise.start(time);
+                playSound: function(type, time) {
+                    const t = time || Tone.now();
+                    switch(type) {
+                        case 'kick':
+                            this.synths.kick.triggerAttackRelease('C1', '8n', t);
+                            break;
+                        case 'snare':
+                            this.synths.snareNoise.triggerAttackRelease('8n', t);
+                            this.synths.snareTone.triggerAttackRelease('E2', '16n', t);
+                            break;
+                        case 'hihat':
+                            this.synths.hihat.triggerAttackRelease('16n', t, 0.3);
+                            break;
+                        case 'hihatOpen':
+                            this.synths.hihatOpen.triggerAttackRelease('8n', t, 0.4);
+                            break;
+                        case 'ride':
+                            this.synths.ride.triggerAttackRelease('8n', t, 0.25);
+                            break;
+                        case 'rim':
+                            this.synths.rim.triggerAttackRelease('G4', '32n', t);
+                            break;
+                        case 'brush':
+                            this.synths.brush.triggerAttackRelease('16n', t);
+                            break;
+                        case 'accent':
+                            this.synths.click.triggerAttackRelease('G5', '32n', t);
+                            break;
+                        case 'click':
+                            this.synths.click.triggerAttackRelease('C5', '32n', t);
+                            break;
                     }
                 },
                 
                 updateBeatIndicator: function(beat, totalBeats) {
-                    // Update visual indicator - map to 8 dots
                     const mappedBeat = Math.floor((beat / totalBeats) * 8);
                     for (let i = 0; i < 8; i++) {
-                        const dot = document.querySelector('[id*="beat-indicator"][id*="' + i + '"]');
-                        if (dot) {
+                        const dot = document.querySelector('[id*="beat-indicator"][id*="\\"beat\\""][id*="\\"' + i + '\\""]');
+                        if (!dot) {
+                            // Try alternate selector
+                            const dots = document.querySelectorAll('[id*="beat-indicator"]');
+                            if (dots[i]) {
+                                if (i === mappedBeat) {
+                                    dots[i].style.backgroundColor = (beat === 0) ? '#ffc107' : '#28a745';
+                                    dots[i].style.transform = 'scale(1.2)';
+                                } else {
+                                    dots[i].style.backgroundColor = '#444';
+                                    dots[i].style.transform = 'scale(1)';
+                                }
+                            }
+                        } else {
                             if (i === mappedBeat) {
-                                dot.style.backgroundColor = (i === 0) ? '#ffc107' : '#28a745';
+                                dot.style.backgroundColor = (beat === 0) ? '#ffc107' : '#28a745';
                                 dot.style.transform = 'scale(1.2)';
                             } else {
                                 dot.style.backgroundColor = '#444';
@@ -1737,58 +1790,66 @@ app.clientside_callback(
                     }
                 },
                 
-                stop: function() {
-                    this.playing = false;
-                    if (this.intervalId) {
-                        clearInterval(this.intervalId);
-                        this.intervalId = null;
-                    }
-                    this.currentBeat = 0;
-                    // Reset indicators
-                    for (let i = 0; i < 8; i++) {
-                        const dot = document.querySelector('[id*="beat-indicator"][id*="' + i + '"]');
-                        if (dot) {
-                            dot.style.backgroundColor = '#444';
-                            dot.style.transform = 'scale(1)';
-                        }
-                    }
+                resetIndicators: function() {
+                    const dots = document.querySelectorAll('[id*="beat-indicator"]');
+                    dots.forEach(dot => {
+                        dot.style.backgroundColor = '#444';
+                        dot.style.transform = 'scale(1)';
+                    });
                 },
                 
-                play: function(patternName, bpm, volume, useCountIn) {
-                    this.initAudio();
+                stop: function() {
+                    this.playing = false;
+                    Tone.Transport.stop();
+                    Tone.Transport.cancel();
+                    this.currentBeat = 0;
+                    this.resetIndicators();
+                },
+                
+                play: async function(patternName, bpm, volume, useCountIn) {
+                    // Start audio context
+                    await Tone.start();
+                    this.initSynths();
                     this.stop();
                     
                     const pat = this.patterns[patternName];
                     if (!pat) return;
                     
                     this.playing = true;
-                    const vol = volume / 100;
-                    const beatDuration = (60 / bpm) / (pat.beats / 4); // Time per subdivision
+                    this.setVolume(volume);
                     
-                    let beat = 0;
+                    // Set tempo - adjust for subdivisions
+                    const subdivision = pat.beats / 4; // 8 beats = 2 per quarter note
+                    Tone.Transport.bpm.value = bpm * subdivision;
+                    
                     const self = this;
+                    let beat = 0;
                     
-                    const playBeat = () => {
+                    // Schedule the loop
+                    this.loopId = Tone.Transport.scheduleRepeat((time) => {
                         if (!self.playing) return;
                         
-                        const now = self.audioCtx.currentTime;
                         const b = beat % pat.beats;
                         
-                        // Play sounds for this beat
-                        if (pat.accent && pat.accent[b]) self.playSound('accent', now, vol);
-                        if (pat.kick && pat.kick[b]) self.playSound('kick', now, vol);
-                        if (pat.snare && pat.snare[b]) self.playSound('snare', now, vol);
-                        if (pat.hihat && pat.hihat[b]) self.playSound('hihat', now, vol * 0.7);
-                        if (pat.rim && pat.rim[b]) self.playSound('rim', now, vol);
-                        if (pat.ride && pat.ride[b]) self.playSound('ride', now, vol * 0.5);
+                        // Play sounds
+                        if (pat.accent && pat.accent[b]) self.playSound('accent', time);
+                        if (pat.kick && pat.kick[b]) self.playSound('kick', time);
+                        if (pat.snare && pat.snare[b]) self.playSound('snare', time);
+                        if (pat.hihat && pat.hihat[b]) self.playSound('hihat', time);
+                        if (pat.hihatOpen && pat.hihatOpen[b]) self.playSound('hihatOpen', time);
+                        if (pat.rim && pat.rim[b]) self.playSound('rim', time);
+                        if (pat.ride && pat.ride[b]) self.playSound('ride', time);
+                        if (pat.brush && pat.brush[b]) self.playSound('brush', time);
                         
-                        self.updateBeatIndicator(b, pat.beats);
+                        // Update visual on main thread
+                        Tone.Draw.schedule(() => {
+                            self.updateBeatIndicator(b, pat.beats);
+                        }, time);
+                        
                         beat++;
-                    };
+                    }, '8n');
                     
-                    // Start immediately
-                    playBeat();
-                    this.intervalId = setInterval(playBeat, beatDuration * 1000);
+                    Tone.Transport.start();
                 }
             };
         }
