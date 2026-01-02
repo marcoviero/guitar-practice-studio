@@ -478,6 +478,93 @@ def create_record_page():
                         ], className="w-100"),
                     ])
                 ], className="mb-4"),
+
+                # Drum Machine Card
+                dbc.Card([
+                    dbc.CardHeader([
+                        html.Span("🥁 Drum Machine", className="me-auto"),
+                        dbc.Badge(id="drum-bpm-display", children="100 BPM", color="info", className="ms-2"),
+                    ], className="d-flex align-items-center"),
+                    dbc.CardBody([
+                        # Pattern selector
+                        dbc.Row([
+                            dbc.Col([
+                                dcc.Dropdown(
+                                    id="drum-pattern-select",
+                                    options=[
+                                        {"label": "Rock 4/4", "value": "rock"},
+                                        {"label": "Pop 4/4", "value": "pop"},
+                                        {"label": "Blues Shuffle", "value": "blues_shuffle"},
+                                        {"label": "Funk", "value": "funk"},
+                                        {"label": "Jazz Swing", "value": "jazz"},
+                                        {"label": "Bossa Nova", "value": "bossa"},
+                                        {"label": "Metronome", "value": "metronome"},
+                                        {"label": "Custom", "value": "custom", "disabled": True},
+                                    ],
+                                    value="rock",
+                                    clearable=False,
+                                    className="mb-2"
+                                ),
+                            ])
+                        ]),
+                        # BPM control
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Label("Tempo", className="small text-muted mb-1"),
+                                html.Div([
+                                    dbc.Button("−", id="drum-bpm-minus", size="sm", color="secondary", outline=True, className="me-1"),
+                                    dcc.Slider(
+                                        id="drum-bpm-slider",
+                                        min=40, max=200, step=1, value=100,
+                                        marks={40: "40", 80: "80", 120: "120", 160: "160", 200: "200"},
+                                        tooltip={"placement": "bottom", "always_visible": False},
+                                        className="flex-grow-1 mx-2"
+                                    ),
+                                    dbc.Button("+", id="drum-bpm-plus", size="sm", color="secondary", outline=True, className="ms-1"),
+                                ], className="d-flex align-items-center"),
+                            ])
+                        ], className="mb-2"),
+                        # Volume control
+                        dbc.Row([
+                            dbc.Col([
+                                dbc.Label("Volume", className="small text-muted mb-1"),
+                                dcc.Slider(
+                                    id="drum-volume-slider",
+                                    min=0, max=100, step=5, value=70,
+                                    marks={0: "🔇", 50: "🔉", 100: "🔊"},
+                                ),
+                            ])
+                        ], className="mb-3"),
+                        # Beat indicator
+                        html.Div([
+                            html.Div([
+                                html.Div(id={"type": "beat-indicator", "beat": i}, 
+                                    className="beat-dot", 
+                                    style={
+                                        "width": "20px", "height": "20px", 
+                                        "borderRadius": "50%", 
+                                        "backgroundColor": "#444",
+                                        "display": "inline-block",
+                                        "margin": "0 4px",
+                                        "transition": "background-color 0.1s"
+                                    }
+                                ) for i in range(8)
+                            ], className="text-center mb-3", id="beat-indicator-container"),
+                        ]),
+                        # Play/Stop buttons
+                        dbc.ButtonGroup([
+                            dbc.Button("▶ Play", id="btn-drum-play", color="success", outline=True),
+                            dbc.Button("⏹ Stop", id="btn-drum-stop", color="danger", outline=True),
+                        ], className="w-100"),
+                        # Count-in option
+                        dbc.Checklist(
+                            id="drum-count-in",
+                            options=[{"label": " Count-in (1 bar)", "value": "countin"}],
+                            value=[],
+                            className="mt-2 small"
+                        ),
+                    ])
+                ], className="mb-4"),
             ], lg=4),
         ]),
         dcc.Interval(id="timer-interval", interval=1000, disabled=True),
@@ -486,6 +573,10 @@ def create_record_page():
         dcc.Store(id="practice-timer-state", data={"running": False, "remaining_seconds": 300, "duration_seconds": 300, "last_tick": None}),
         dcc.Store(id="device-state", data={"camera": 0, "audio": None}),
         dcc.Store(id="practice-plan-id", data=plan_id),
+        dcc.Store(id="drum-machine-state", data={"playing": False, "currentBeat": 0}),
+        # Drum machine clientside callback outputs
+        html.Div(id="drum-machine-output", style={"display": "none"}),
+        html.Div(id="drum-bpm-output", style={"display": "none"}),
     ])
 
 
@@ -816,6 +907,23 @@ def delete_piece(n_clicks_list, ids):
 def toggle_devices_collapse(n_clicks, is_open):
     new_state = not is_open
     return new_state, f"{'▼' if new_state else '▶'} Recording Devices"
+
+
+# --- Drum Machine callbacks ---
+
+@callback(Output("drum-bpm-display", "children"), Input("drum-bpm-slider", "value"))
+def update_bpm_display(bpm):
+    return f"{bpm} BPM"
+
+
+@callback(Output("drum-bpm-slider", "value"),
+    Input("drum-bpm-minus", "n_clicks"), Input("drum-bpm-plus", "n_clicks"),
+    State("drum-bpm-slider", "value"), prevent_initial_call=True)
+def adjust_drum_bpm(minus_clicks, plus_clicks, current_bpm):
+    triggered = ctx.triggered_id
+    if triggered == "drum-bpm-minus": return max(40, current_bpm - 5)
+    elif triggered == "drum-bpm-plus": return min(200, current_bpm + 5)
+    return current_bpm
 
 
 @callback(Output("timer-duration-input", "value"),
@@ -1410,6 +1518,306 @@ app.clientside_callback(
         return '';
     }""",
     Output("annotation-seek-output", "children"), Input({"type": "annotation-seek", "index": ALL}, "n_clicks"), prevent_initial_call=True)
+
+
+# ============================================================================
+# DRUM MACHINE CLIENTSIDE CALLBACK
+# ============================================================================
+
+app.clientside_callback(
+    """
+    function(playClicks, stopClicks, pattern, bpm, volume, countIn) {
+        // Initialize drum machine on window if not exists
+        if (!window.drumMachine) {
+            window.drumMachine = {
+                audioCtx: null,
+                playing: false,
+                currentBeat: 0,
+                intervalId: null,
+                
+                // Drum patterns - extensible for future custom editor
+                patterns: {
+                    rock: {
+                        name: "Rock 4/4",
+                        beats: 8,
+                        kick:   [1,0,0,0,1,0,0,0],
+                        snare:  [0,0,1,0,0,0,1,0],
+                        hihat:  [1,1,1,1,1,1,1,1],
+                        accent: [1,0,0,0,0,0,0,0]
+                    },
+                    pop: {
+                        name: "Pop 4/4",
+                        beats: 8,
+                        kick:   [1,0,0,0,1,0,1,0],
+                        snare:  [0,0,1,0,0,0,1,0],
+                        hihat:  [1,1,1,1,1,1,1,1],
+                        accent: [1,0,0,0,0,0,0,0]
+                    },
+                    blues_shuffle: {
+                        name: "Blues Shuffle",
+                        beats: 12,
+                        kick:   [1,0,0,0,0,0,1,0,0,0,0,0],
+                        snare:  [0,0,0,1,0,0,0,0,0,1,0,0],
+                        hihat:  [1,0,1,1,0,1,1,0,1,1,0,1],
+                        accent: [1,0,0,0,0,0,0,0,0,0,0,0]
+                    },
+                    funk: {
+                        name: "Funk",
+                        beats: 16,
+                        kick:   [1,0,0,1,0,0,1,0,0,0,1,0,0,0,0,0],
+                        snare:  [0,0,0,0,1,0,0,0,0,0,0,0,1,0,0,0],
+                        hihat:  [1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1],
+                        accent: [1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+                    },
+                    jazz: {
+                        name: "Jazz Swing",
+                        beats: 12,
+                        kick:   [1,0,0,0,0,0,1,0,0,0,0,0],
+                        snare:  [0,0,0,0,0,0,0,0,0,0,0,0],
+                        hihat:  [1,0,1,1,0,1,1,0,1,1,0,1],
+                        accent: [1,0,0,0,0,0,0,0,0,0,0,0],
+                        ride:   [1,0,1,1,0,1,1,0,1,1,0,1]
+                    },
+                    bossa: {
+                        name: "Bossa Nova",
+                        beats: 8,
+                        kick:   [1,0,0,1,0,0,1,0],
+                        snare:  [0,0,0,0,0,0,0,0],
+                        hihat:  [1,0,1,0,1,0,1,0],
+                        accent: [1,0,0,0,0,0,0,0],
+                        rim:    [0,0,1,0,0,1,0,1]
+                    },
+                    metronome: {
+                        name: "Metronome",
+                        beats: 4,
+                        kick:   [0,0,0,0],
+                        snare:  [0,0,0,0],
+                        hihat:  [1,1,1,1],
+                        accent: [1,0,0,0]
+                    }
+                },
+                
+                initAudio: function() {
+                    if (!this.audioCtx) {
+                        this.audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                    }
+                    if (this.audioCtx.state === 'suspended') {
+                        this.audioCtx.resume();
+                    }
+                },
+                
+                playSound: function(type, time, vol) {
+                    const ctx = this.audioCtx;
+                    const masterGain = ctx.createGain();
+                    masterGain.gain.value = vol;
+                    masterGain.connect(ctx.destination);
+                    
+                    if (type === 'kick') {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(150, time);
+                        osc.frequency.exponentialRampToValueAtTime(40, time + 0.1);
+                        gain.gain.setValueAtTime(1, time);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.15);
+                        osc.connect(gain);
+                        gain.connect(masterGain);
+                        osc.start(time);
+                        osc.stop(time + 0.15);
+                    }
+                    else if (type === 'snare') {
+                        // Noise burst for snare
+                        const bufferSize = ctx.sampleRate * 0.1;
+                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const data = buffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        const noise = ctx.createBufferSource();
+                        noise.buffer = buffer;
+                        const noiseGain = ctx.createGain();
+                        noiseGain.gain.setValueAtTime(0.8, time);
+                        noiseGain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
+                        // Add tone
+                        const osc = ctx.createOscillator();
+                        osc.type = 'triangle';
+                        osc.frequency.value = 180;
+                        const oscGain = ctx.createGain();
+                        oscGain.gain.setValueAtTime(0.5, time);
+                        oscGain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                        noise.connect(noiseGain);
+                        osc.connect(oscGain);
+                        noiseGain.connect(masterGain);
+                        oscGain.connect(masterGain);
+                        noise.start(time);
+                        osc.start(time);
+                        osc.stop(time + 0.1);
+                    }
+                    else if (type === 'hihat') {
+                        const bufferSize = ctx.sampleRate * 0.05;
+                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const data = buffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        const noise = ctx.createBufferSource();
+                        noise.buffer = buffer;
+                        const filter = ctx.createBiquadFilter();
+                        filter.type = 'highpass';
+                        filter.frequency.value = 7000;
+                        const gain = ctx.createGain();
+                        gain.gain.setValueAtTime(0.3, time);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.05);
+                        noise.connect(filter);
+                        filter.connect(gain);
+                        gain.connect(masterGain);
+                        noise.start(time);
+                    }
+                    else if (type === 'click' || type === 'accent') {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.value = type === 'accent' ? 1200 : 800;
+                        gain.gain.setValueAtTime(0.5, time);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.03);
+                        osc.connect(gain);
+                        gain.connect(masterGain);
+                        osc.start(time);
+                        osc.stop(time + 0.03);
+                    }
+                    else if (type === 'rim') {
+                        const osc = ctx.createOscillator();
+                        const gain = ctx.createGain();
+                        osc.type = 'square';
+                        osc.frequency.value = 500;
+                        gain.gain.setValueAtTime(0.3, time);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.02);
+                        osc.connect(gain);
+                        gain.connect(masterGain);
+                        osc.start(time);
+                        osc.stop(time + 0.02);
+                    }
+                    else if (type === 'ride') {
+                        const bufferSize = ctx.sampleRate * 0.3;
+                        const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+                        const data = buffer.getChannelData(0);
+                        for (let i = 0; i < bufferSize; i++) {
+                            data[i] = Math.random() * 2 - 1;
+                        }
+                        const noise = ctx.createBufferSource();
+                        noise.buffer = buffer;
+                        const filter = ctx.createBiquadFilter();
+                        filter.type = 'bandpass';
+                        filter.frequency.value = 5000;
+                        filter.Q.value = 2;
+                        const gain = ctx.createGain();
+                        gain.gain.setValueAtTime(0.2, time);
+                        gain.gain.exponentialRampToValueAtTime(0.01, time + 0.3);
+                        noise.connect(filter);
+                        filter.connect(gain);
+                        gain.connect(masterGain);
+                        noise.start(time);
+                    }
+                },
+                
+                updateBeatIndicator: function(beat, totalBeats) {
+                    // Update visual indicator - map to 8 dots
+                    const mappedBeat = Math.floor((beat / totalBeats) * 8);
+                    for (let i = 0; i < 8; i++) {
+                        const dot = document.querySelector('[id*="beat-indicator"][id*="' + i + '"]');
+                        if (dot) {
+                            if (i === mappedBeat) {
+                                dot.style.backgroundColor = (i === 0) ? '#ffc107' : '#28a745';
+                                dot.style.transform = 'scale(1.2)';
+                            } else {
+                                dot.style.backgroundColor = '#444';
+                                dot.style.transform = 'scale(1)';
+                            }
+                        }
+                    }
+                },
+                
+                stop: function() {
+                    this.playing = false;
+                    if (this.intervalId) {
+                        clearInterval(this.intervalId);
+                        this.intervalId = null;
+                    }
+                    this.currentBeat = 0;
+                    // Reset indicators
+                    for (let i = 0; i < 8; i++) {
+                        const dot = document.querySelector('[id*="beat-indicator"][id*="' + i + '"]');
+                        if (dot) {
+                            dot.style.backgroundColor = '#444';
+                            dot.style.transform = 'scale(1)';
+                        }
+                    }
+                },
+                
+                play: function(patternName, bpm, volume, useCountIn) {
+                    this.initAudio();
+                    this.stop();
+                    
+                    const pat = this.patterns[patternName];
+                    if (!pat) return;
+                    
+                    this.playing = true;
+                    const vol = volume / 100;
+                    const beatDuration = (60 / bpm) / (pat.beats / 4); // Time per subdivision
+                    
+                    let beat = 0;
+                    const self = this;
+                    
+                    const playBeat = () => {
+                        if (!self.playing) return;
+                        
+                        const now = self.audioCtx.currentTime;
+                        const b = beat % pat.beats;
+                        
+                        // Play sounds for this beat
+                        if (pat.accent && pat.accent[b]) self.playSound('accent', now, vol);
+                        if (pat.kick && pat.kick[b]) self.playSound('kick', now, vol);
+                        if (pat.snare && pat.snare[b]) self.playSound('snare', now, vol);
+                        if (pat.hihat && pat.hihat[b]) self.playSound('hihat', now, vol * 0.7);
+                        if (pat.rim && pat.rim[b]) self.playSound('rim', now, vol);
+                        if (pat.ride && pat.ride[b]) self.playSound('ride', now, vol * 0.5);
+                        
+                        self.updateBeatIndicator(b, pat.beats);
+                        beat++;
+                    };
+                    
+                    // Start immediately
+                    playBeat();
+                    this.intervalId = setInterval(playBeat, beatDuration * 1000);
+                }
+            };
+        }
+        
+        // Handle button clicks
+        const triggered = window.dash_clientside.callback_context.triggered;
+        if (!triggered || triggered.length === 0) return '';
+        
+        const triggerId = triggered[0].prop_id.split('.')[0];
+        
+        if (triggerId === 'btn-drum-play') {
+            const useCountIn = countIn && countIn.includes('countin');
+            window.drumMachine.play(pattern, bpm, volume, useCountIn);
+        } else if (triggerId === 'btn-drum-stop') {
+            window.drumMachine.stop();
+        }
+        
+        return '';
+    }
+    """,
+    Output("drum-machine-output", "children"),
+    Input("btn-drum-play", "n_clicks"),
+    Input("btn-drum-stop", "n_clicks"),
+    State("drum-pattern-select", "value"),
+    State("drum-bpm-slider", "value"),
+    State("drum-volume-slider", "value"),
+    State("drum-count-in", "value"),
+    prevent_initial_call=True
+)
 
 
 # ============================================================================
