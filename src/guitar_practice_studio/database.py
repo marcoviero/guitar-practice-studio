@@ -33,6 +33,7 @@ class PracticeSession(Base):
     has_recording = Column(Boolean, default=False)
     recording_filename = Column(String(255))  # Base filename (audio/video use same base)
     has_video = Column(Boolean, default=False)
+    recording_type = Column(String(50), default="Exercise")  # Performance, Exercise, Riff
     
     # Self-assessment
     notes = Column(Text)  # Post-practice reflection
@@ -99,7 +100,7 @@ class Exercise(Base):
     
     id = Column(Integer, primary_key=True)
     name = Column(String(200), nullable=False)
-    category = Column(String(50), nullable=False)  # Technique, Knowledge, Songs, Ear Training, Time/Rythm, Improvisation
+    category = Column(String(50), nullable=False)  # Technique, Chord Perfect, Songs, Ear Training, Theory, Transcribing
     description = Column(Text)
     default_duration_minutes = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)  # Can hide exercises without deleting
@@ -228,6 +229,16 @@ def _run_migrations():
         conn.commit()
         print("Migration complete.")
     
+    # Check if recording_type column exists in practice_sessions
+    cursor.execute("PRAGMA table_info(practice_sessions)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if columns and "recording_type" not in columns:
+        print("Migration: Adding recording_type column to practice_sessions...")
+        cursor.execute("ALTER TABLE practice_sessions ADD COLUMN recording_type VARCHAR(50) DEFAULT 'Exercise'")
+        conn.commit()
+        print("Migration complete.")
+    
     # Check if repertoire table exists (new table)
     cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='repertoire'")
     if not cursor.fetchone():
@@ -270,7 +281,8 @@ def create_practice_session(
     notes: str = "",
     rating: int = None,
     recording_filename: str = None,
-    has_video: bool = False
+    has_video: bool = False,
+    recording_type: str = "Exercise"
 ) -> PracticeSession:
     """Create a new practice session"""
     session = get_session()
@@ -283,7 +295,8 @@ def create_practice_session(
         rating=rating,
         has_recording=recording_filename is not None,
         recording_filename=recording_filename,
-        has_video=has_video
+        has_video=has_video,
+        recording_type=recording_type
     )
     session.add(practice)
     session.commit()
@@ -427,11 +440,11 @@ def init_default_exercises():
         # Fallback defaults
         exercises_data = [
             {"name": "Spider Exercise", "category": "Technique", "duration": 5},
-            {"name": "Fretboard Notes", "category": "Knowledge", "duration": 5},
+            {"name": "One Minute Changes", "category": "Chord Perfect", "duration": 5},
             {"name": "New Piece - Learning", "category": "Songs", "duration": 15},
             {"name": "Interval Recognition", "category": "Ear Training", "duration": 5},
-            {"name": "Metronome", "category": "Time/Rythm", "duration": 5},
-            {"name": "Looper Pedal", "category": "Improvisation", "duration": 10},
+            {"name": "Fretboard Notes", "category": "Theory", "duration": 5},
+            {"name": "Transcribe Melody", "category": "Transcribing", "duration": 10},
         ]
         print("Using default exercises (exercises.toml not found)")
     
@@ -653,6 +666,7 @@ def remove_today_entry(plan_id: int, exercise_id: int):
 
 PIECE_TYPES = ["Song", "Etude", "Suite", "Riff", "Exercise", "Other"]
 PIECE_STATUSES = ["Want to Learn", "Learning", "Review", "Mastered", "Archived"]
+RECORDING_TYPES = ["Performance", "Exercise", "Riff"]
 
 
 def get_all_repertoire(include_archived: bool = False) -> List[RepertoirePiece]:
@@ -793,6 +807,7 @@ def get_daily_summary(target_date: date) -> dict:
         "has_recording": r.has_recording,
         "has_video": r.has_video,
         "recording_filename": r.recording_filename,
+        "recording_type": r.recording_type,
         "rating": r.rating,
         "notes": r.notes
     } for r in recordings]
