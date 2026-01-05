@@ -107,6 +107,7 @@ app.index_string = '''
             }
         </style>
         <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+        <script src="https://www.youtube.com/iframe_api"></script>
     </head>
     <body>
         {%app_entry%}
@@ -436,6 +437,112 @@ def create_record_page():
                     ])
                 ], className="mb-4"),
 
+                # YouTube Player Card (collapsible)
+                dbc.Card([
+                    dbc.CardHeader(
+                        dbc.Button(
+                            "▶ Backing Track",
+                            id="collapse-yt-btn",
+                            color="link",
+                            className="p-0 text-decoration-none text-light"
+                        )
+                    ),
+                    dbc.Collapse(
+                        dbc.CardBody([
+                            # URL input
+                            dbc.InputGroup([
+                                dbc.Input(
+                                    id="yt-url-input",
+                                    placeholder="Paste YouTube URL...",
+                                    type="text",
+                                    debounce=True,
+                                ),
+                                dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
+                            ], className="mb-2", size="sm"),
+                            # Player container
+                            html.Div(
+                                id="yt-player-container",
+                                children=[
+                                    html.Div(
+                                        id="yt-player",
+                                        style={
+                                            "width": "100%",
+                                            "aspectRatio": "16/9",
+                                            "backgroundColor": "#000",
+                                            "display": "flex",
+                                            "alignItems": "center",
+                                            "justifyContent": "center",
+                                            "color": "#666",
+                                            "fontSize": "0.9em",
+                                        },
+                                        children="Paste a YouTube URL above"
+                                    ),
+                                ],
+                                className="mb-2"
+                            ),
+                            # Playback controls
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.ButtonGroup([
+                                        dbc.Button("⏮", id="btn-yt-restart", size="sm", color="secondary", outline=True,
+                                                   title="Restart"),
+                                        dbc.Button("◀◀", id="btn-yt-back", size="sm", color="secondary", outline=True,
+                                                   title="-10s"),
+                                        dbc.Button("▶", id="btn-yt-play", size="sm", color="success", outline=True,
+                                                   title="Play"),
+                                        dbc.Button("⏸", id="btn-yt-pause", size="sm", color="warning", outline=True,
+                                                   title="Pause"),
+                                        dbc.Button("▶▶", id="btn-yt-forward", size="sm", color="secondary",
+                                                   outline=True, title="+10s"),
+                                    ], size="sm", className="w-100"),
+                                ])
+                            ], className="mb-2"),
+                            # Speed control
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Speed", className="small text-muted mb-1"),
+                                    dcc.Slider(
+                                        id="yt-speed-slider",
+                                        min=0.25, max=2, step=0.25, value=1,
+                                        marks={0.25: ".25", 0.5: ".5", 0.75: ".75", 1: "1x", 1.5: "1.5", 2: "2x"},
+                                    ),
+                                ])
+                            ], className="mb-2"),
+                            # Options row
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-audio-only",
+                                        options=[{"label": " Audio only", "value": "audio"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-loop-enabled",
+                                        options=[{"label": " Loop", "value": "loop"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-sync-drum",
+                                        options=[{"label": " Sync", "value": "sync"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                            ]),
+                            # Speed display (hidden, for badge)
+                            html.Span(id="yt-speed-display", style={"display": "none"}),
+                        ]),
+                        id="collapse-yt",
+                        is_open=False,
+                    ),
+                ], className="mb-4"),
+
                 html.Div(id="post-record-form", style={"display": "none"}, children=[
                     dbc.Card([
                         dbc.CardHeader("Review Recording"),
@@ -578,6 +685,13 @@ def create_record_page():
         # Drum machine clientside callback outputs
         html.Div(id="drum-machine-output", style={"display": "none"}),
         html.Div(id="drum-bpm-output", style={"display": "none"}),
+        # YouTube player stores and outputs
+        dcc.Store(id="yt-video-id", data=None),
+        html.Div(id="yt-load-output", style={"display": "none"}),
+        html.Div(id="yt-controls-output", style={"display": "none"}),
+        html.Div(id="yt-speed-output", style={"display": "none"}),
+        html.Div(id="yt-loop-output", style={"display": "none"}),
+        html.Div(id="yt-audio-only-output", style={"display": "none"}),
     ])
 
 
@@ -908,6 +1022,13 @@ def delete_piece(n_clicks_list, ids):
 def toggle_devices_collapse(n_clicks, is_open):
     new_state = not is_open
     return new_state, f"{'▼' if new_state else '▶'} Recording Devices"
+
+
+@callback(Output("collapse-yt", "is_open"), Output("collapse-yt-btn", "children"),
+    Input("collapse-yt-btn", "n_clicks"), State("collapse-yt", "is_open"), prevent_initial_call=True)
+def toggle_yt_collapse(n_clicks, is_open):
+    new_state = not is_open
+    return new_state, f"{'▼' if new_state else '▶'} Backing Track"
 
 
 # --- Drum Machine callbacks ---
@@ -1877,6 +1998,209 @@ app.clientside_callback(
     State("drum-bpm-slider", "value"),
     State("drum-volume-slider", "value"),
     State("drum-count-in", "value"),
+    prevent_initial_call=True
+)
+
+
+# ============================================================================
+# YOUTUBE PLAYER CLIENTSIDE CALLBACKS
+# ============================================================================
+
+# Update speed display
+app.clientside_callback(
+    "function(speed) { return speed + 'x'; }",
+    Output("yt-speed-display", "children"),
+    Input("yt-speed-slider", "value")
+)
+
+# Load YouTube video
+app.clientside_callback(
+    """
+    function(loadClicks, url) {
+        if (!loadClicks) return window.dash_clientside.no_update;
+        
+        // Extract video ID from URL
+        function extractVideoId(url) {
+            if (!url) return null;
+            const patterns = [
+                /(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/)([a-zA-Z0-9_-]{11})/,
+                /^([a-zA-Z0-9_-]{11})$/
+            ];
+            for (const pattern of patterns) {
+                const match = url.match(pattern);
+                if (match) return match[1];
+            }
+            return null;
+        }
+        
+        const videoId = extractVideoId(url);
+        if (!videoId) {
+            console.error('Invalid YouTube URL');
+            return '';
+        }
+        
+        // Initialize YouTube player
+        const container = document.getElementById('yt-player');
+        if (!container) return '';
+        
+        // Clear existing content
+        container.innerHTML = '';
+        container.style.color = '';
+        
+        // Create iframe div
+        const playerDiv = document.createElement('div');
+        playerDiv.id = 'yt-iframe-player';
+        playerDiv.style.width = '100%';
+        playerDiv.style.height = '100%';
+        container.appendChild(playerDiv);
+        
+        // Create player
+        if (window.YT && window.YT.Player) {
+            window.ytPlayer = new YT.Player('yt-iframe-player', {
+                videoId: videoId,
+                playerVars: {
+                    'autoplay': 0,
+                    'controls': 1,
+                    'rel': 0,
+                    'modestbranding': 1,
+                    'fs': 1
+                },
+                events: {
+                    'onReady': function(event) {
+                        console.log('YouTube player ready');
+                    },
+                    'onStateChange': function(event) {
+                        // Handle looping
+                        if (event.data === YT.PlayerState.ENDED) {
+                            const loopCheckbox = document.querySelector('#yt-loop-enabled input');
+                            if (loopCheckbox && loopCheckbox.checked) {
+                                event.target.seekTo(0);
+                                event.target.playVideo();
+                            }
+                        }
+                    }
+                }
+            });
+        } else {
+            // YT API not loaded yet, use iframe fallback
+            container.innerHTML = '<iframe width="100%" height="100%" src="https://www.youtube.com/embed/' + videoId + '?enablejsapi=1&rel=0&modestbranding=1" frameborder="0" allowfullscreen></iframe>';
+        }
+        
+        return '';
+    }
+    """,
+    Output("yt-load-output", "children"),
+    Input("btn-yt-load", "n_clicks"),
+    State("yt-url-input", "value"),
+    prevent_initial_call=True
+)
+
+# Playback controls
+app.clientside_callback(
+    """
+    function(restart, back, play, pause, forward) {
+        if (!window.ytPlayer || typeof window.ytPlayer.getPlayerState !== 'function') return '';
+        
+        const triggered = window.dash_clientside.callback_context.triggered;
+        if (!triggered || triggered.length === 0) return '';
+        
+        const triggerId = triggered[0].prop_id.split('.')[0];
+        
+        try {
+            switch(triggerId) {
+                case 'btn-yt-restart':
+                    window.ytPlayer.seekTo(0);
+                    break;
+                case 'btn-yt-back':
+                    const currentTime = window.ytPlayer.getCurrentTime();
+                    window.ytPlayer.seekTo(Math.max(0, currentTime - 10));
+                    break;
+                case 'btn-yt-play':
+                    window.ytPlayer.playVideo();
+                    break;
+                case 'btn-yt-pause':
+                    window.ytPlayer.pauseVideo();
+                    break;
+                case 'btn-yt-forward':
+                    const time = window.ytPlayer.getCurrentTime();
+                    const duration = window.ytPlayer.getDuration();
+                    window.ytPlayer.seekTo(Math.min(duration, time + 10));
+                    break;
+            }
+        } catch(e) {
+            console.error('YouTube control error:', e);
+        }
+        
+        return '';
+    }
+    """,
+    Output("yt-controls-output", "children"),
+    Input("btn-yt-restart", "n_clicks"),
+    Input("btn-yt-back", "n_clicks"),
+    Input("btn-yt-play", "n_clicks"),
+    Input("btn-yt-pause", "n_clicks"),
+    Input("btn-yt-forward", "n_clicks"),
+    prevent_initial_call=True
+)
+
+# Speed control
+app.clientside_callback(
+    """
+    function(speed) {
+        if (!window.ytPlayer || typeof window.ytPlayer.setPlaybackRate !== 'function') return '';
+        try {
+            window.ytPlayer.setPlaybackRate(speed);
+        } catch(e) {
+            console.error('YouTube speed error:', e);
+        }
+        return '';
+    }
+    """,
+    Output("yt-speed-output", "children"),
+    Input("yt-speed-slider", "value"),
+    prevent_initial_call=True
+)
+
+# Sync with drum machine (start both together)
+app.clientside_callback(
+    """
+    function(drumPlay, syncEnabled) {
+        if (!drumPlay) return '';
+        if (!syncEnabled || !syncEnabled.includes('sync')) return '';
+        if (!window.ytPlayer || typeof window.ytPlayer.playVideo !== 'function') return '';
+        
+        try {
+            window.ytPlayer.seekTo(0);
+            window.ytPlayer.playVideo();
+        } catch(e) {
+            console.error('YouTube sync error:', e);
+        }
+        return '';
+    }
+    """,
+    Output("yt-loop-output", "children"),
+    Input("btn-drum-play", "n_clicks"),
+    State("yt-sync-drum", "value"),
+    prevent_initial_call=True
+)
+
+# Audio-only toggle - hide/show video
+app.clientside_callback(
+    """
+    function(audioOnly) {
+        const container = document.getElementById('yt-player-container');
+        if (container) {
+            if (audioOnly && audioOnly.includes('audio')) {
+                container.style.display = 'none';
+            } else {
+                container.style.display = 'block';
+            }
+        }
+        return '';
+    }
+    """,
+    Output("yt-audio-only-output", "children"),
+    Input("yt-audio-only", "value"),
     prevent_initial_call=True
 )
 
