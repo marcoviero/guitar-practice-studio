@@ -421,46 +421,77 @@ def get_category_targets() -> dict:
 
 
 def init_default_exercises():
-    """Initialize exercises from TOML config or defaults"""
-    from datetime import timedelta
+    """Initialize or sync exercises from TOML config"""
     db = get_session()
-    
-    # Check if exercises already exist
-    if db.query(Exercise).count() > 0:
-        db.close()
-        return
     
     # Try to load from TOML
     config = load_exercises_config()
     
     if config and "exercises" in config:
         exercises_data = config["exercises"]
-        print(f"Loading {len(exercises_data)} exercises from exercises.toml")
+        print(f"Syncing {len(exercises_data)} exercises from exercises.toml")
     else:
-        # Fallback defaults
+        # Fallback defaults only if no TOML and no existing exercises
+        if db.query(Exercise).count() > 0:
+            db.close()
+            return
         exercises_data = [
             {"name": "Spider Exercise", "category": "Technique", "duration": 5},
-            {"name": "One Minute Changes", "category": "Chord Perfect", "duration": 5},
+            {"name": "One Minute Changes", "category": "Technique", "duration": 5},
             {"name": "New Piece - Learning", "category": "Songs", "duration": 15},
             {"name": "Interval Recognition", "category": "Ear Training", "duration": 5},
-            {"name": "Fretboard Notes", "category": "Theory", "duration": 5},
-            {"name": "Transcribe Melody", "category": "Transcribing", "duration": 10},
+            {"name": "Fretboard Notes", "category": "Knowledge", "duration": 5},
+            {"name": "Improvisation", "category": "Improvisation", "duration": 10},
         ]
         print("Using default exercises (exercises.toml not found)")
     
+    # Get existing exercises by name
+    existing = {ex.name: ex for ex in db.query(Exercise).all()}
+    
+    updated = 0
+    added = 0
+    
     for i, ex in enumerate(exercises_data):
-        exercise = Exercise(
-            name=ex["name"],
-            category=ex["category"],
-            default_duration_minutes=ex.get("duration", ex.get("default_duration_minutes", 5)),
-            description=ex.get("description", ""),
-            sort_order=i
-        )
-        db.add(exercise)
+        name = ex["name"]
+        category = ex["category"]
+        duration = ex.get("duration", ex.get("default_duration_minutes", 5))
+        description = ex.get("description", "")
+        
+        if name in existing:
+            # Update existing exercise
+            exercise = existing[name]
+            if (exercise.category != category or 
+                exercise.default_duration_minutes != duration or
+                exercise.description != description or
+                exercise.sort_order != i):
+                exercise.category = category
+                exercise.default_duration_minutes = duration
+                exercise.description = description
+                exercise.sort_order = i
+                updated += 1
+        else:
+            # Add new exercise
+            exercise = Exercise(
+                name=name,
+                category=category,
+                default_duration_minutes=duration,
+                description=description,
+                sort_order=i
+            )
+            db.add(exercise)
+            added += 1
+    
+    # Optionally: remove exercises not in TOML (commented out to preserve custom exercises)
+    # toml_names = {ex["name"] for ex in exercises_data}
+    # for name, exercise in existing.items():
+    #     if name not in toml_names:
+    #         db.delete(exercise)
     
     db.commit()
     db.close()
-    print(f"Initialized {len(exercises_data)} exercises")
+    
+    if added or updated:
+        print(f"Exercises: {added} added, {updated} updated")
 
 
 def get_or_create_current_week_plan() -> tuple:
