@@ -453,7 +453,7 @@ def create_record_page():
                             dbc.InputGroup([
                                 dbc.Input(
                                     id="yt-url-input",
-                                    placeholder="Paste YouTube URL...",
+                                    value="https://youtu.be/0Yu9sN7E194?si=6SDDo88pWHz0UxQI",
                                     type="text",
                                     debounce=True,
                                 ),
