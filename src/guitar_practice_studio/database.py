@@ -481,17 +481,21 @@ def init_default_exercises():
             db.add(exercise)
             added += 1
     
-    # Optionally: remove exercises not in TOML (commented out to preserve custom exercises)
-    # toml_names = {ex["name"] for ex in exercises_data}
-    # for name, exercise in existing.items():
-    #     if name not in toml_names:
-    #         db.delete(exercise)
+    # Remove exercises not in TOML
+    toml_names = {ex["name"] for ex in exercises_data}
+    removed = 0
+    for name, exercise in existing.items():
+        if name not in toml_names:
+            # Also remove any plan entries referencing this exercise
+            db.query(WeeklyPlanEntry).filter(WeeklyPlanEntry.exercise_id == exercise.id).delete()
+            db.delete(exercise)
+            removed += 1
     
     db.commit()
     db.close()
     
-    if added or updated:
-        print(f"Exercises: {added} added, {updated} updated")
+    if added or updated or removed:
+        print(f"Exercises: {added} added, {updated} updated, {removed} removed")
 
 
 def get_or_create_current_week_plan() -> tuple:
@@ -514,6 +518,27 @@ def get_or_create_current_week_plan() -> tuple:
     plan_id = plan.id
     db.close()
     return plan_id, monday
+
+
+def get_or_create_week_plan(week_start: date) -> int:
+    """Get or create a plan for a specific week. Returns plan_id"""
+    from datetime import timedelta
+    db = get_session()
+    
+    # Ensure we have a Monday
+    monday = week_start - timedelta(days=week_start.weekday())
+    
+    plan = db.query(WeeklyPlan).filter(WeeklyPlan.week_start == monday).first()
+    
+    if not plan:
+        plan = WeeklyPlan(week_start=monday)
+        db.add(plan)
+        db.commit()
+        db.refresh(plan)
+    
+    plan_id = plan.id
+    db.close()
+    return plan_id
 
 
 def get_all_exercises() -> List[Exercise]:

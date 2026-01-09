@@ -107,13 +107,23 @@ class Recorder:
         # Fallback to OpenCV (less descriptive names)
         if not cameras and VIDEO_AVAILABLE:
             print("  Using OpenCV fallback for camera detection")
+            consecutive_failures = 0
             for i in range(10):
-                cap = cv2.VideoCapture(i)
-                if cap.isOpened():
-                    w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                    h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                    cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
-                    cap.release()
+                if consecutive_failures >= 3:
+                    break
+                try:
+                    cap = cv2.VideoCapture(i)
+                    if cap.isOpened():
+                        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                        cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
+                        cap.release()
+                        consecutive_failures = 0
+                    else:
+                        consecutive_failures += 1
+                        cap.release()
+                except Exception:
+                    consecutive_failures += 1
         
         return cameras
     

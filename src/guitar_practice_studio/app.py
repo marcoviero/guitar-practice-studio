@@ -22,7 +22,7 @@ from .database import (
     init_db, get_session, PracticeSession, Goal, Annotation, Exercise, WeeklyPlanEntry, RepertoirePiece,
     create_practice_session, get_recent_sessions, add_annotation,
     get_active_goals, get_practice_stats, get_sessions_by_date_range,
-    init_default_exercises, get_or_create_current_week_plan, get_exercises_by_category,
+    init_default_exercises, get_or_create_current_week_plan, get_or_create_week_plan, get_exercises_by_category,
     get_week_plan_entries, set_plan_entry, toggle_entry_completed, get_today_exercises,
     get_category_targets, get_week_category_totals,
     reorder_today_entry, remove_today_entry,
@@ -267,18 +267,19 @@ def create_planner_page():
     """Weekly planner page with exercise grid by category"""
     plan_id, week_start = get_or_create_current_week_plan()
     week_end = week_start + timedelta(days=6)
-    week_nav = dbc.Row([
-        dbc.Col([dbc.Button("← Prev Week", id="btn-prev-week", color="secondary", size="sm")], width="auto"),
-        dbc.Col([html.H4(f"Week of {week_start.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}", className="text-center mb-0")]),
-        dbc.Col([dbc.Button("Next Week →", id="btn-next-week", color="secondary", size="sm")], width="auto"),
-    ], className="mb-4 align-items-center")
     
     return dbc.Container([
         html.H2("Weekly Planner", className="mb-3"),
         dcc.Store(id="current-plan-id", data=plan_id),
+        dcc.Store(id="current-week-start", data=week_start.isoformat()),
         html.Div(_build_today_card(plan_id), id="today-card-container"),
-        week_nav,
-        html.Div(_build_category_grids(plan_id), id="planner-grids"),
+        # Week navigation
+        dbc.Row([
+            dbc.Col([dbc.Button("← Prev Week", id="btn-prev-week", color="secondary", size="sm")], width="auto"),
+            dbc.Col([html.H4(id="planner-week-label", className="text-center mb-0")]),
+            dbc.Col([dbc.Button("Next Week →", id="btn-next-week", color="secondary", size="sm")], width="auto"),
+        ], className="mb-4 align-items-center"),
+        html.Div(id="planner-grids"),
     ], fluid=True, className="py-3")
 
 
@@ -437,112 +438,6 @@ def create_record_page():
                     ])
                 ], className="mb-4"),
 
-                # YouTube Player Card (collapsible)
-                dbc.Card([
-                    dbc.CardHeader(
-                        dbc.Button(
-                            "▶ Backing Track",
-                            id="collapse-yt-btn",
-                            color="link",
-                            className="p-0 text-decoration-none text-light"
-                        )
-                    ),
-                    dbc.Collapse(
-                        dbc.CardBody([
-                            # URL input
-                            dbc.InputGroup([
-                                dbc.Input(
-                                    id="yt-url-input",
-                                    value="https://youtu.be/0Yu9sN7E194?si=6SDDo88pWHz0UxQI",
-                                    type="text",
-                                    debounce=True,
-                                ),
-                                dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
-                            ], className="mb-2", size="sm"),
-                            # Player container
-                            html.Div(
-                                id="yt-player-container",
-                                children=[
-                                    html.Div(
-                                        id="yt-player",
-                                        style={
-                                            "width": "100%",
-                                            "aspectRatio": "16/9",
-                                            "backgroundColor": "#000",
-                                            "display": "flex",
-                                            "alignItems": "center",
-                                            "justifyContent": "center",
-                                            "color": "#666",
-                                            "fontSize": "0.9em",
-                                        },
-                                        children="Paste a YouTube URL above"
-                                    ),
-                                ],
-                                className="mb-2"
-                            ),
-                            # Playback controls
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.ButtonGroup([
-                                        dbc.Button("⏮", id="btn-yt-restart", size="sm", color="secondary", outline=True,
-                                                   title="Restart"),
-                                        dbc.Button("◀◀", id="btn-yt-back", size="sm", color="secondary", outline=True,
-                                                   title="-10s"),
-                                        dbc.Button("▶", id="btn-yt-play", size="sm", color="success", outline=True,
-                                                   title="Play"),
-                                        dbc.Button("⏸", id="btn-yt-pause", size="sm", color="warning", outline=True,
-                                                   title="Pause"),
-                                        dbc.Button("▶▶", id="btn-yt-forward", size="sm", color="secondary",
-                                                   outline=True, title="+10s"),
-                                    ], size="sm", className="w-100"),
-                                ])
-                            ], className="mb-2"),
-                            # Speed control
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Label("Speed", className="small text-muted mb-1"),
-                                    dcc.Slider(
-                                        id="yt-speed-slider",
-                                        min=0.25, max=2, step=0.25, value=1,
-                                        marks={0.25: ".25", 0.5: ".5", 0.75: ".75", 1: "1x", 1.5: "1.5", 2: "2x"},
-                                    ),
-                                ])
-                            ], className="mb-2"),
-                            # Options row
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-audio-only",
-                                        options=[{"label": " Audio only", "value": "audio"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-loop-enabled",
-                                        options=[{"label": " Loop", "value": "loop"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-sync-drum",
-                                        options=[{"label": " Sync", "value": "sync"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                            ]),
-                            # Speed display (hidden, for badge)
-                            html.Span(id="yt-speed-display", style={"display": "none"}),
-                        ]),
-                        id="collapse-yt",
-                        is_open=False,
-                    ),
-                ], className="mb-4"),
-
                 html.Div(id="post-record-form", style={"display": "none"}, children=[
                     dbc.Card([
                         dbc.CardHeader("Review Recording"),
@@ -672,6 +567,107 @@ def create_record_page():
                             className="mt-2 small"
                         ),
                     ])
+                ], className="mb-4"),
+
+                # YouTube Player Card (collapsible)
+                dbc.Card([
+                    dbc.CardHeader(
+                        dbc.Button(
+                            "▶ Backing Track",
+                            id="collapse-yt-btn",
+                            color="link",
+                            className="p-0 text-decoration-none text-light"
+                        )
+                    ),
+                    dbc.Collapse(
+                        dbc.CardBody([
+                            # URL input
+                            dbc.InputGroup([
+                                dbc.Input(
+                                    id="yt-url-input",
+                                    placeholder="Paste YouTube URL...",
+                                    type="text",
+                                    debounce=True,
+                                ),
+                                dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
+                            ], className="mb-2", size="sm"),
+                            # Player container
+                            html.Div(
+                                id="yt-player-container",
+                                children=[
+                                    html.Div(
+                                        id="yt-player",
+                                        style={
+                                            "width": "100%",
+                                            "aspectRatio": "16/9",
+                                            "backgroundColor": "#000",
+                                            "display": "flex",
+                                            "alignItems": "center",
+                                            "justifyContent": "center",
+                                            "color": "#666",
+                                            "fontSize": "0.9em",
+                                        },
+                                        children="Paste a YouTube URL above"
+                                    ),
+                                ],
+                                className="mb-2"
+                            ),
+                            # Playback controls
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.ButtonGroup([
+                                        dbc.Button("⏮", id="btn-yt-restart", size="sm", color="secondary", outline=True, title="Restart"),
+                                        dbc.Button("◀◀", id="btn-yt-back", size="sm", color="secondary", outline=True, title="-10s"),
+                                        dbc.Button("▶", id="btn-yt-play", size="sm", color="success", outline=True, title="Play"),
+                                        dbc.Button("⏸", id="btn-yt-pause", size="sm", color="warning", outline=True, title="Pause"),
+                                        dbc.Button("▶▶", id="btn-yt-forward", size="sm", color="secondary", outline=True, title="+10s"),
+                                    ], size="sm", className="w-100"),
+                                ])
+                            ], className="mb-2"),
+                            # Speed control
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Speed", className="small text-muted mb-1"),
+                                    dcc.Slider(
+                                        id="yt-speed-slider",
+                                        min=0.25, max=2, step=0.25, value=1,
+                                        marks={0.25: ".25", 0.5: ".5", 0.75: ".75", 1: "1x", 1.5: "1.5", 2: "2x"},
+                                    ),
+                                ])
+                            ], className="mb-2"),
+                            # Options row
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-audio-only",
+                                        options=[{"label": " Audio only", "value": "audio"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-loop-enabled",
+                                        options=[{"label": " Loop", "value": "loop"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-sync-drum",
+                                        options=[{"label": " Sync", "value": "sync"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                            ]),
+                            # Speed display (hidden, for badge)
+                            html.Span(id="yt-speed-display", style={"display": "none"}),
+                        ]),
+                        id="collapse-yt",
+                        is_open=False,
+                    ),
                 ], className="mb-4"),
             ], lg=4),
         ]),
@@ -916,7 +912,46 @@ def display_page(pathname):
 
 # --- Planner callbacks ---
 
-@callback(Output("today-card-container", "children"), Output("planner-grids", "children"),
+@callback(
+    Output("planner-week-label", "children"),
+    Output("current-plan-id", "data"),
+    Output("current-week-start", "data"),
+    Output("planner-grids", "children"),
+    Input("btn-prev-week", "n_clicks"),
+    Input("btn-next-week", "n_clicks"),
+    Input("url", "pathname"),
+    State("current-week-start", "data"),
+    prevent_initial_call=False
+)
+def handle_week_navigation(prev_clicks, next_clicks, pathname, current_week_str):
+    if pathname != "/planner":
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update
+    
+    # Determine current week
+    if current_week_str:
+        current_week = date.fromisoformat(current_week_str)
+    else:
+        today = date.today()
+        current_week = today - timedelta(days=today.weekday())
+    
+    # Handle navigation
+    triggered = ctx.triggered_id
+    if triggered == "btn-prev-week":
+        current_week = current_week - timedelta(days=7)
+    elif triggered == "btn-next-week":
+        current_week = current_week + timedelta(days=7)
+    
+    # Get or create plan for this week
+    plan_id = get_or_create_week_plan(current_week)
+    
+    # Build label
+    week_end = current_week + timedelta(days=6)
+    week_label = f"Week of {current_week.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}"
+    
+    return week_label, plan_id, current_week.isoformat(), _build_category_grids(plan_id)
+
+
+@callback(Output("today-card-container", "children"), Output("planner-grids", "children", allow_duplicate=True),
     Input({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "value"),
     State({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "id"),
     State("current-plan-id", "data"), prevent_initial_call=True)
@@ -1195,16 +1230,9 @@ def _delete_recording_files(result):
     Input("btn-refresh-devices", "n_clicks"),
     State("camera-select", "value"), State("audio-select", "value"), prevent_initial_call=True)
 def refresh_devices(n, current_camera, current_audio):
-    import cv2
-    import sounddevice as sd
-    cameras = []
-    for i in range(10):
-        cap = cv2.VideoCapture(i)
-        if cap.isOpened():
-            cameras.append({"index": i, "name": f"{cap.getBackendName()} ({int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))}x{int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))})"})
-            cap.release()
-    sd._terminate(); sd._initialize()
-    audio_devs = [{"index": i, "name": d['name']} for i, d in enumerate(sd.query_devices()) if d['max_input_channels'] > 0]
+    # Use recorder's methods which have platform-specific handling
+    cameras = recorder.get_available_cameras()
+    audio_devs = recorder.get_available_audio_devices()
     
     camera_options = [{"label": f"Camera {c['index']}: {c['name']}", "value": c['index']} for c in cameras] or [{"label": "No cameras found", "value": -1}]
     audio_options = [{"label": a['name'], "value": a['index']} for a in audio_devs] or [{"label": "No audio inputs found", "value": -1}]

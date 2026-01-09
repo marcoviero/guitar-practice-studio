@@ -33,15 +33,16 @@ name = "Improvisation"
 target_minutes = 20
 color = "#28a745"
 
+
 # ============================================================================
 # EXERCISES BY CATEGORY
 # ============================================================================
 
 [[exercises]]
-name = "Finger Stretching"
+name = "Chromatic Scale"
 category = "Technique"
-duration = 3
-description = "Warm-up stretches for fretting hand"
+duration = 5
+description = "Full chromatic scale practice"
 
 [[exercises]]
 name = "Spider Exercise"
@@ -50,16 +51,10 @@ duration = 5
 description = "Chromatic finger independence exercise"
 
 [[exercises]]
-name = "One Minute Changes"
+name = "Finger Stretching"
 category = "Technique"
-duration = 5
-description = "Timed chord transition drills"
-
-[[exercises]]
-name = "Chromatic Scale"
-category = "Technique"
-duration = 5
-description = "Full chromatic scale practice"
+duration = 3
+description = "Warm-up stretches for fretting hand"
 
 [[exercises]]
 name = "Bend in Tune"
@@ -80,10 +75,22 @@ duration = 5
 description = "Legato technique practice"
 
 [[exercises]]
-name = "Fingerpicking Patterns"
+name = "Picks & Flicks"
 category = "Technique"
 duration = 5
-description = "Fingerstyle pattern practice"
+description = "Mastering Tapping"
+
+[[exercises]]
+name = "One Minute Changes"
+category = "Technique"
+duration = 5
+description = "Timed chord transition drills"
+
+[[exercises]]
+name = "Scale in Three"
+category = "Knowledge"
+duration = 5
+description = "Dexterity on fretboard"
 
 # --- Knowledge ---
 
@@ -100,16 +107,16 @@ duration = 5
 description = "Connecting scales on fretboard"
 
 [[exercises]]
-name = "Scale in Three"
-category = "Knowledge"
-duration = 5
-description = "Dexterity on fretboard"
-
-[[exercises]]
 name = "Arpeggios"
 category = "Knowledge"
 duration = 5
 description = "Mastering all five shapes"
+
+[[exercises]]
+name = "Theory"
+category = "Knowledge"
+duration = 5
+description = "Grade Level Progression"
 
 [[exercises]]
 name = "Key Signatures"
@@ -123,18 +130,12 @@ category = "Knowledge"
 duration = 10
 description = "Learning Blues Riffs"
 
-[[exercises]]
-name = "Theory"
-category = "Knowledge"
-duration = 15
-description = "Grade Level Progression"
-
 # --- Songs (practice types - actual songs come from Repertoire) ---
 
 [[exercises]]
 name = "Etudes"
 category = "Songs"
-duration = 5
+duration = 10
 description = "Exercise-focused songs"
 
 [[exercises]]
@@ -196,10 +197,10 @@ description = "Learn a solo by ear"
 # --- Time/Rythm ---
 
 [[exercises]]
-name = "Rhythm Clapping"
+name = "Self Recording"
 category = "Time/Rythm"
-duration = 5
-description = "Rhythm dictation and reproduction"
+duration = 10
+description = "Record yourself playing"
 
 [[exercises]]
 name = "Strumming Patterns"
@@ -208,10 +209,10 @@ duration = 5
 description = "Rythm practice for existing songs"
 
 [[exercises]]
-name = "Self Recording"
+name = "Rhythm Clapping"
 category = "Time/Rythm"
-duration = 5
-description = "Record yourself playing"
+duration = 3
+description = "Rhythm dictation and reproduction"
 
 # --- Improvisation ---
 
