@@ -15,46 +15,66 @@ This app helps you:
 
 ## Installation
 
-Requires Python 3.10+ and [uv](https://docs.astral.sh/uv/).
+### Step 1: Install uv (Package Manager)
+
+**uv** is a fast Python package manager that makes installation simple.
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+**Windows (PowerShell):**
+```powershell
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+After installation, restart your terminal (or open a new one).
+
+To verify it worked, type:
+```bash
+uv --version
+```
+You should see something like `uv 0.5.x`.
+
+### Step 2: Install Guitar Practice Studio
 
 ```bash
-# Clone or unzip the project
+# Unzip the project and navigate into it
 cd guitar-practice-studio
 
-# Install dependencies
+# Install dependencies (this may take a minute the first time)
 uv sync
 
 # Run the app
 uv run guitar-practice
 ```
 
-Then open http://127.0.0.1:8050 in your browser.
+Then open **http://127.0.0.1:8050** in your browser.
 
-### Optional: ffmpeg (for video recording)
+### Step 3 (Optional): Install ffmpeg for Video Recording
 
-ffmpeg is needed for video recording (muxing audio + video). Audio-only recording works without it.
+ffmpeg is needed for video recording (combining audio + video). Audio-only recording works without it.
 
+**macOS:**
 ```bash
-# macOS
 brew install ffmpeg
-
-# Ubuntu/Debian
-sudo apt install ffmpeg
-
-# Windows: Download from ffmpeg.org and add to PATH
 ```
+
+**Ubuntu/Debian:**
+```bash
+sudo apt install ffmpeg
+```
+
+**Windows:** Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH.
 
 ## Features
 
 ### 📅 Planner Tab
 - **Weekly grid** — Schedule exercises for each day of the week
-- **Six practice categories** (Justin Guitar inspired):
-  - Technique (finger gym, scales, picking)
-  - Chord Perfect (chord changes, transitions)
-  - Songs (repertoire practice)
-  - Ear Training (intervals, chord recognition)
-  - Theory (fretboard knowledge, chord construction)
-  - Transcribing (learning by ear)
+- **Week navigation** — Browse previous and future weeks
+- **Six practice categories** (customizable in `exercises.toml`):
+  - Technique, Knowledge, Songs, Ear Training, Time/Rhythm, Improvisation
 - **Time targets** — Each category shows progress toward daily targets
 - **Visual feedback** — Categories turn green when targets are met
 - **Today's checklist** — Quick view of what to practice today
@@ -65,33 +85,37 @@ sudo apt install ffmpeg
 - **Metadata** — Artist, genre, difficulty (1-5 stars), notes, links
 - **Quick actions** — Advance status, edit, delete
 
-### 📹 Practice Tab (Recording)
-- Audio/video recording with device selection
-- Real-time duration timer
-- Post-session notes and self-rating
-- Automatic file organization
+### 🎤 Practice Tab
+- **Countdown timer** — Set your practice duration and stay focused
+- **Recording** with device selection (camera + microphone)
+- **Recording types** — Label as Performance, Exercise, or Riff
+- **🥁 Drum Machine** — Built-in patterns for practicing with rhythm:
+  - Rock, Pop, Blues Shuffle, Funk, Jazz Swing, Bossa Nova, Metronome
+  - Adjustable BPM (40-200) and volume
+  - Visual beat indicator
+- **▶ YouTube Backing Tracks** — Paste any YouTube URL to play along:
+  - Speed control (0.25x - 2x) for learning parts slowly
+  - Loop toggle for continuous practice
+  - Audio-only mode (hides video)
+  - Sync with drum machine
+- **Today's Practice sidebar** — Quick checklist from your plan
 
 ### 📔 Journal Tab
-- View all practice sessions
-- Filter by date and category
-- Add manual (non-recorded) entries
+- **Week-at-a-glance** — Navigate weeks with visual daily summaries
+- **Daily details** — All recordings and notes for the selected day
+- **Editable notes** — Add reflections for any day
 
 ### 🔍 Review Tab
-- Playback recordings with waveform visualization
-- Loop sections for focused review
-- Add time-stamped annotations
-- Speed control (0.5x - 2x)
-
-### 📊 Stats Tab
-- Practice time by category (pie chart)
-- Daily practice timeline
-- Summary statistics
+- **Playback recordings** with waveform visualization
+- **Loop sections** for focused review
+- **Filter by type** — Performance, Exercise, Riff
+- **Speed control** (0.5x - 2x)
 
 ## Configuration
 
 ### exercises.toml
 
-All exercises and category targets are defined in `exercises.toml`:
+All exercises and category targets are defined in `exercises.toml`. **Changes sync automatically on restart** — no need to delete the database.
 
 ```toml
 [categories.technique]
@@ -106,11 +130,9 @@ description = "Chromatic finger independence exercise"
 ```
 
 Edit this file to:
-- Add/remove exercises
+- Add/remove/rename exercises
 - Change default durations
 - Adjust target minutes per category
-
-**To reload exercises:** Delete `~/.guitar-practice-studio/practice.db` and restart the app.
 
 ### Environment Variables
 
@@ -121,8 +143,47 @@ Edit this file to:
 ## Data Storage
 
 All user data is stored in `~/.guitar-practice-studio/`:
-- `practice.db` — SQLite database (sessions, plans, repertoire, goals)
+- `practice.db` — SQLite database (sessions, plans, repertoire)
 - `recordings/` — Audio and video files
+
+## Troubleshooting
+
+### No cameras/microphones detected
+
+**macOS:** Grant permissions in System Settings > Privacy & Security > Camera/Microphone
+
+List available devices:
+```bash
+ffmpeg -f avfoundation -list_devices true -i ""
+```
+
+### Recording fails
+
+1. Check terminal output for errors
+2. Try audio-only recording first (uncheck camera)
+3. Ensure no other app is using the camera
+4. Click "Refresh" in the Recording Devices section
+
+### Database reset
+
+To completely reset (clears all data):
+```bash
+rm ~/.guitar-practice-studio/practice.db
+```
+
+### uv not found after installation
+
+- **macOS/Linux:** Run `source ~/.bashrc` or `source ~/.zshrc`, or restart terminal
+- **Windows:** Close and reopen PowerShell
+
+## Tips for Effective Practice
+
+1. **Plan your week** — Use the Planner to schedule balanced practice
+2. **Use the drum machine** — Practicing with rhythm improves timing
+3. **Record yourself** — Even audio-only reveals things you miss while playing
+4. **Slow it down** — Use YouTube speed control to learn difficult parts
+5. **Review with purpose** — Use annotations to mark specific issues
+6. **Be consistent** — Short daily sessions beat long sporadic ones
 
 ## Project Structure
 
@@ -139,42 +200,6 @@ guitar-practice-studio/
         ├── recorder.py     # Audio/video capture
         └── audio_utils.py  # Waveform generation
 ```
-
-## Troubleshooting
-
-### No cameras/microphones detected
-
-**macOS:** Grant permissions in System Settings > Privacy & Security > Camera/Microphone
-
-List available devices:
-```bash
-ffmpeg -f avfoundation -list_devices true -i ""
-```
-
-### Recording fails
-
-1. Check terminal output for errors
-2. Try audio-only recording first
-3. Ensure no other app is using the camera
-4. Test ffmpeg directly:
-   ```bash
-   ffmpeg -f avfoundation -framerate 30 -i "0:0" -t 3 test.mp4
-   ```
-
-### Database issues
-
-To reset the database (clears all data):
-```bash
-rm ~/.guitar-practice-studio/practice.db
-```
-
-## Tips for Effective Practice
-
-1. **Plan your week** — Use the Planner to schedule balanced practice
-2. **Track your repertoire** — Keep pieces moving through the status workflow
-3. **Record yourself** — Even audio-only reveals things you miss while playing
-4. **Review with purpose** — Use annotations to mark specific issues
-5. **Be consistent** — Short daily sessions beat long sporadic ones
 
 ## License
 
