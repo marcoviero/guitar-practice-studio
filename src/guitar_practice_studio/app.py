@@ -438,6 +438,112 @@ def create_record_page():
                     ])
                 ], className="mb-4"),
 
+                # YouTube Player Card (collapsible)
+                dbc.Card([
+                    dbc.CardHeader(
+                        dbc.Button(
+                            "▶ Backing Track",
+                            id="collapse-yt-btn",
+                            color="link",
+                            className="p-0 text-decoration-none text-light"
+                        )
+                    ),
+                    dbc.Collapse(
+                        dbc.CardBody([
+                            # URL input
+                            dbc.InputGroup([
+                                dbc.Input(
+                                    id="yt-url-input",
+                                    placeholder="Paste YouTube URL...",
+                                    type="text",
+                                    debounce=True,
+                                ),
+                                dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
+                            ], className="mb-2", size="sm"),
+                            # Player container
+                            html.Div(
+                                id="yt-player-container",
+                                children=[
+                                    html.Div(
+                                        id="yt-player",
+                                        style={
+                                            "width": "100%",
+                                            "aspectRatio": "16/9",
+                                            "backgroundColor": "#000",
+                                            "display": "flex",
+                                            "alignItems": "center",
+                                            "justifyContent": "center",
+                                            "color": "#666",
+                                            "fontSize": "0.9em",
+                                        },
+                                        children="Paste a YouTube URL above"
+                                    ),
+                                ],
+                                className="mb-2"
+                            ),
+                            # Playback controls
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.ButtonGroup([
+                                        dbc.Button("⏮", id="btn-yt-restart", size="sm", color="secondary", outline=True,
+                                                   title="Restart"),
+                                        dbc.Button("◀◀", id="btn-yt-back", size="sm", color="secondary", outline=True,
+                                                   title="-10s"),
+                                        dbc.Button("▶", id="btn-yt-play", size="sm", color="success", outline=True,
+                                                   title="Play"),
+                                        dbc.Button("⏸", id="btn-yt-pause", size="sm", color="warning", outline=True,
+                                                   title="Pause"),
+                                        dbc.Button("▶▶", id="btn-yt-forward", size="sm", color="secondary",
+                                                   outline=True, title="+10s"),
+                                    ], size="sm", className="w-100"),
+                                ])
+                            ], className="mb-2"),
+                            # Speed control
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Label("Speed", className="small text-muted mb-1"),
+                                    dcc.Slider(
+                                        id="yt-speed-slider",
+                                        min=0.25, max=2, step=0.25, value=1,
+                                        marks={0.25: ".25", 0.5: ".5", 0.75: ".75", 1: "1x", 1.5: "1.5", 2: "2x"},
+                                    ),
+                                ])
+                            ], className="mb-2"),
+                            # Options row
+                            dbc.Row([
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-audio-only",
+                                        options=[{"label": " Audio only", "value": "audio"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-loop-enabled",
+                                        options=[{"label": " Loop", "value": "loop"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                                dbc.Col([
+                                    dbc.Checklist(
+                                        id="yt-sync-drum",
+                                        options=[{"label": " Sync", "value": "sync"}],
+                                        value=[],
+                                        className="small"
+                                    ),
+                                ], width=4),
+                            ]),
+                            # Speed display (hidden, for badge)
+                            html.Span(id="yt-speed-display", style={"display": "none"}),
+                        ]),
+                        id="collapse-yt",
+                        is_open=False,
+                    ),
+                ], className="mb-4"),
+
                 html.Div(id="post-record-form", style={"display": "none"}, children=[
                     dbc.Card([
                         dbc.CardHeader("Review Recording"),
@@ -465,7 +571,11 @@ def create_record_page():
                 ], className="mb-4"),
 
                 dbc.Card([
-                    dbc.CardHeader([html.Span("Practice Timer", className="me-auto"), dbc.Checklist(id="timer-sync-recording", options=[{"label": " Sync with recording", "value": "sync"}], value=[], inline=True, className="ms-2 small")], className="d-flex align-items-center"),
+                    dbc.CardHeader([
+                        html.Span("Practice Timer", className="me-auto"), 
+                        dbc.Checklist(id="keep-awake-toggle", options=[{"label": " ☕ Keep Awake", "value": "awake"}], value=[], inline=True, className="ms-2 small"),
+                        dbc.Checklist(id="timer-sync-recording", options=[{"label": " Sync with recording", "value": "sync"}], value=[], inline=True, className="ms-2 small"),
+                    ], className="d-flex align-items-center"),
                     dbc.CardBody([
                         dbc.Row([dbc.Col([html.Div([
                             dbc.Button("−", id="btn-timer-minus", color="secondary", outline=True, size="sm", className="me-2"),
@@ -568,107 +678,6 @@ def create_record_page():
                         ),
                     ])
                 ], className="mb-4"),
-
-                # YouTube Player Card (collapsible)
-                dbc.Card([
-                    dbc.CardHeader(
-                        dbc.Button(
-                            "▶ Backing Track",
-                            id="collapse-yt-btn",
-                            color="link",
-                            className="p-0 text-decoration-none text-light"
-                        )
-                    ),
-                    dbc.Collapse(
-                        dbc.CardBody([
-                            # URL input
-                            dbc.InputGroup([
-                                dbc.Input(
-                                    id="yt-url-input",
-                                    placeholder="Paste YouTube URL...",
-                                    type="text",
-                                    debounce=True,
-                                ),
-                                dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
-                            ], className="mb-2", size="sm"),
-                            # Player container
-                            html.Div(
-                                id="yt-player-container",
-                                children=[
-                                    html.Div(
-                                        id="yt-player",
-                                        style={
-                                            "width": "100%",
-                                            "aspectRatio": "16/9",
-                                            "backgroundColor": "#000",
-                                            "display": "flex",
-                                            "alignItems": "center",
-                                            "justifyContent": "center",
-                                            "color": "#666",
-                                            "fontSize": "0.9em",
-                                        },
-                                        children="Paste a YouTube URL above"
-                                    ),
-                                ],
-                                className="mb-2"
-                            ),
-                            # Playback controls
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.ButtonGroup([
-                                        dbc.Button("⏮", id="btn-yt-restart", size="sm", color="secondary", outline=True, title="Restart"),
-                                        dbc.Button("◀◀", id="btn-yt-back", size="sm", color="secondary", outline=True, title="-10s"),
-                                        dbc.Button("▶", id="btn-yt-play", size="sm", color="success", outline=True, title="Play"),
-                                        dbc.Button("⏸", id="btn-yt-pause", size="sm", color="warning", outline=True, title="Pause"),
-                                        dbc.Button("▶▶", id="btn-yt-forward", size="sm", color="secondary", outline=True, title="+10s"),
-                                    ], size="sm", className="w-100"),
-                                ])
-                            ], className="mb-2"),
-                            # Speed control
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Label("Speed", className="small text-muted mb-1"),
-                                    dcc.Slider(
-                                        id="yt-speed-slider",
-                                        min=0.25, max=2, step=0.25, value=1,
-                                        marks={0.25: ".25", 0.5: ".5", 0.75: ".75", 1: "1x", 1.5: "1.5", 2: "2x"},
-                                    ),
-                                ])
-                            ], className="mb-2"),
-                            # Options row
-                            dbc.Row([
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-audio-only",
-                                        options=[{"label": " Audio only", "value": "audio"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-loop-enabled",
-                                        options=[{"label": " Loop", "value": "loop"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                                dbc.Col([
-                                    dbc.Checklist(
-                                        id="yt-sync-drum",
-                                        options=[{"label": " Sync", "value": "sync"}],
-                                        value=[],
-                                        className="small"
-                                    ),
-                                ], width=4),
-                            ]),
-                            # Speed display (hidden, for badge)
-                            html.Span(id="yt-speed-display", style={"display": "none"}),
-                        ]),
-                        id="collapse-yt",
-                        is_open=False,
-                    ),
-                ], className="mb-4"),
             ], lg=4),
         ]),
         dcc.Interval(id="timer-interval", interval=1000, disabled=True),
@@ -688,6 +697,8 @@ def create_record_page():
         html.Div(id="yt-speed-output", style={"display": "none"}),
         html.Div(id="yt-loop-output", style={"display": "none"}),
         html.Div(id="yt-audio-only-output", style={"display": "none"}),
+        # Wake lock output
+        html.Div(id="wake-lock-output", style={"display": "none"}),
     ])
 
 
@@ -2229,6 +2240,59 @@ app.clientside_callback(
     """,
     Output("yt-audio-only-output", "children"),
     Input("yt-audio-only", "value"),
+    prevent_initial_call=True
+)
+
+# Wake Lock API - keep screen awake during practice
+app.clientside_callback(
+    """
+    function(awakeValue) {
+        // Initialize wake lock state on window
+        if (!window.wakeLockState) {
+            window.wakeLockState = { lock: null };
+        }
+        
+        const shouldBeAwake = awakeValue && awakeValue.includes('awake');
+        
+        if (shouldBeAwake && !window.wakeLockState.lock) {
+            // Request wake lock
+            if ('wakeLock' in navigator) {
+                navigator.wakeLock.request('screen')
+                    .then(lock => {
+                        window.wakeLockState.lock = lock;
+                        console.log('Wake lock acquired');
+                        
+                        // Handle visibility change (re-acquire on tab focus)
+                        document.addEventListener('visibilitychange', async () => {
+                            if (document.visibilityState === 'visible' && window.wakeLockState.lock) {
+                                try {
+                                    window.wakeLockState.lock = await navigator.wakeLock.request('screen');
+                                } catch (e) {
+                                    console.log('Wake lock re-acquire failed:', e);
+                                }
+                            }
+                        });
+                    })
+                    .catch(err => {
+                        console.log('Wake lock failed:', err);
+                    });
+            } else {
+                console.log('Wake Lock API not supported');
+            }
+        } else if (!shouldBeAwake && window.wakeLockState.lock) {
+            // Release wake lock
+            window.wakeLockState.lock.release()
+                .then(() => {
+                    window.wakeLockState.lock = null;
+                    console.log('Wake lock released');
+                });
+        }
+        
+        return '';
+    }
+    """,
+    Output("wake-lock-output", "children"),
+    Input("keep-awake-toggle", "value"),
     prevent_initial_call=True
 )
 
