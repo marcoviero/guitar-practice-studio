@@ -29,6 +29,7 @@ from .database import (
     get_all_repertoire, get_active_repertoire, add_repertoire_piece, update_repertoire_piece, delete_repertoire_piece,
     get_daily_summary, get_week_summary, save_daily_notes,
     add_manual_practice, update_manual_practice, delete_manual_practice,
+    get_all_backing_tracks, add_backing_track, delete_backing_track,
     PRACTICE_CATEGORIES, PIECE_TYPES, PIECE_STATUSES, RECORDING_TYPES
 )
 from .recorder import Recorder, PlaybackController, AUDIO_AVAILABLE, VIDEO_AVAILABLE
@@ -196,8 +197,8 @@ def _build_today_card(plan_id: int):
         ], className="mb-4", color="dark", outline=True)
 
 
-def _build_category_grids(plan_id: int):
-    """Build the category grid cards"""
+def _build_category_grids(plan_id: int, guitar_type: str = "all"):
+    """Build the category grid cards filtered by guitar type"""
     exercises_by_cat = get_exercises_by_category()
     entries = get_week_plan_entries(plan_id)
     category_targets = get_category_targets()
@@ -219,6 +220,9 @@ def _build_category_grids(plan_id: int):
     category_cards = []
     for category in PRACTICE_CATEGORIES:
         exercises = exercises_by_cat.get(category, [])
+        # Filter by guitar type
+        if guitar_type and guitar_type != "all":
+            exercises = [ex for ex in exercises if ex.matches_guitar(guitar_type)]
         if not exercises:
             continue
         
@@ -272,6 +276,25 @@ def create_planner_page():
         html.H2("Weekly Planner", className="mb-3"),
         dcc.Store(id="current-plan-id", data=plan_id),
         dcc.Store(id="current-week-start", data=week_start.isoformat()),
+        dcc.Store(id="current-guitar-type", data="all"),
+        # Guitar type selector
+        dbc.Row([
+            dbc.Col([
+                dbc.Label("Guitar:", className="me-2"),
+                dcc.Dropdown(
+                    id="guitar-type-select",
+                    options=[
+                        {"label": "🎸 All Guitars", "value": "all"},
+                        {"label": "🎻 Classical", "value": "classical"},
+                        {"label": "⚡ Electric", "value": "electric"},
+                        {"label": "🪕 Steel String", "value": "steel"},
+                    ],
+                    value="all",
+                    clearable=False,
+                    style={"width": "200px"}
+                ),
+            ], width="auto", className="d-flex align-items-center"),
+        ], className="mb-3"),
         html.Div(_build_today_card(plan_id), id="today-card-container"),
         # Week navigation
         dbc.Row([
@@ -438,6 +461,25 @@ def create_record_page():
                     ])
                 ], className="mb-4"),
 
+                html.Div(id="post-record-form", style={"display": "none"}, children=[
+                    dbc.Card([
+                        dbc.CardHeader("Review Recording"),
+                        dbc.CardBody([
+                            html.Div(id="recording-preview", className="mb-3"),
+                            html.Hr(),
+                            dbc.Label("How did it go?"),
+                            dbc.RadioItems(id="record-rating", options=[{"label": "⭐" * i, "value": i} for i in range(1, 6)], inline=True, className="mb-3"),
+                            dbc.Label("Reflection"),
+                            dbc.Textarea(id="record-notes", placeholder="What did you learn? What needs work?"),
+                            html.Div([
+                                dbc.Button("💾 Save", id="btn-save-session", color="success", className="me-2"),
+                                dbc.Button("🔄 Discard & Retry", id="btn-discard-retry", color="warning", className="me-2"),
+                                dbc.Button("🗑 Discard", id="btn-discard", color="danger", outline=True),
+                            ], className="mt-3"),
+                        ])
+                    ])
+                ]),
+
                 # YouTube Player Card (collapsible)
                 dbc.Card([
                     dbc.CardHeader(
@@ -450,7 +492,22 @@ def create_record_page():
                     ),
                     dbc.Collapse(
                         dbc.CardBody([
-                            # URL input
+                            # Saved tracks dropdown
+                            dbc.Row([
+                                dbc.Col([
+                                    dcc.Dropdown(
+                                        id="saved-tracks-dropdown",
+                                        placeholder="Select saved track...",
+                                        options=[],
+                                        className="mb-2"
+                                    ),
+                                ], width=10),
+                                dbc.Col([
+                                    dbc.Button("🗑", id="btn-delete-track", color="danger", size="sm", outline=True,
+                                               title="Delete selected track", disabled=True),
+                                ], width=2, className="d-flex align-items-start"),
+                            ], className="mb-2"),
+                            # URL input with save
                             dbc.InputGroup([
                                 dbc.Input(
                                     id="yt-url-input",
@@ -459,6 +516,15 @@ def create_record_page():
                                     debounce=True,
                                 ),
                                 dbc.Button("Load", id="btn-yt-load", color="primary", size="sm"),
+                            ], className="mb-1", size="sm"),
+                            dbc.InputGroup([
+                                dbc.Input(
+                                    id="yt-track-title",
+                                    placeholder="Track name (optional)...",
+                                    type="text",
+                                    size="sm",
+                                ),
+                                dbc.Button("💾 Save", id="btn-save-track", color="success", size="sm", outline=True),
                             ], className="mb-2", size="sm"),
                             # Player container
                             html.Div(
@@ -543,25 +609,6 @@ def create_record_page():
                         is_open=False,
                     ),
                 ], className="mb-4"),
-
-                html.Div(id="post-record-form", style={"display": "none"}, children=[
-                    dbc.Card([
-                        dbc.CardHeader("Review Recording"),
-                        dbc.CardBody([
-                            html.Div(id="recording-preview", className="mb-3"),
-                            html.Hr(),
-                            dbc.Label("How did it go?"),
-                            dbc.RadioItems(id="record-rating", options=[{"label": "⭐" * i, "value": i} for i in range(1, 6)], inline=True, className="mb-3"),
-                            dbc.Label("Reflection"),
-                            dbc.Textarea(id="record-notes", placeholder="What did you learn? What needs work?"),
-                            html.Div([
-                                dbc.Button("💾 Save", id="btn-save-session", color="success", className="me-2"),
-                                dbc.Button("🔄 Discard & Retry", id="btn-discard-retry", color="warning", className="me-2"),
-                                dbc.Button("🗑 Discard", id="btn-discard", color="danger", outline=True),
-                            ], className="mt-3"),
-                        ])
-                    ])
-                ]),
             ], lg=8),
             
             dbc.Col([
@@ -930,11 +977,12 @@ def display_page(pathname):
     Output("planner-grids", "children"),
     Input("btn-prev-week", "n_clicks"),
     Input("btn-next-week", "n_clicks"),
+    Input("guitar-type-select", "value"),
     Input("url", "pathname"),
     State("current-week-start", "data"),
     prevent_initial_call=False
 )
-def handle_week_navigation(prev_clicks, next_clicks, pathname, current_week_str):
+def handle_week_navigation(prev_clicks, next_clicks, guitar_type, pathname, current_week_str):
     if pathname != "/planner":
         return dash.no_update, dash.no_update, dash.no_update, dash.no_update
     
@@ -959,14 +1007,15 @@ def handle_week_navigation(prev_clicks, next_clicks, pathname, current_week_str)
     week_end = current_week + timedelta(days=6)
     week_label = f"Week of {current_week.strftime('%b %d')} - {week_end.strftime('%b %d, %Y')}"
     
-    return week_label, plan_id, current_week.isoformat(), _build_category_grids(plan_id)
+    return week_label, plan_id, current_week.isoformat(), _build_category_grids(plan_id, guitar_type or "all")
 
 
 @callback(Output("today-card-container", "children"), Output("planner-grids", "children", allow_duplicate=True),
     Input({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "value"),
     State({"type": "plan-checkbox", "exercise": ALL, "day": ALL}, "id"),
-    State("current-plan-id", "data"), prevent_initial_call=True)
-def handle_plan_checkbox(values, ids, plan_id):
+    State("current-plan-id", "data"),
+    State("guitar-type-select", "value"), prevent_initial_call=True)
+def handle_plan_checkbox(values, ids, plan_id, guitar_type):
     if not ctx.triggered_id or not plan_id: return dash.no_update, dash.no_update
     triggered = ctx.triggered_id
     exercise_id, day = triggered["exercise"], triggered["day"]
@@ -976,7 +1025,7 @@ def handle_plan_checkbox(values, ids, plan_id):
             break
     else: return dash.no_update, dash.no_update
     set_plan_entry(plan_id, exercise_id, day, new_value)
-    return _build_today_card(plan_id), _build_category_grids(plan_id)
+    return _build_today_card(plan_id), _build_category_grids(plan_id, guitar_type or "all")
 
 
 @callback(Output({"type": "today-complete", "entry": MATCH}, "value"),
@@ -1010,11 +1059,12 @@ def handle_move_down(n_clicks_list, ids, plan_id):
 @callback(Output("today-card-container", "children", allow_duplicate=True), Output("planner-grids", "children", allow_duplicate=True),
     Input({"type": "today-remove", "entry": ALL, "exercise": ALL}, "n_clicks"),
     State({"type": "today-remove", "entry": ALL, "exercise": ALL}, "id"),
-    State("current-plan-id", "data"), prevent_initial_call=True)
-def handle_remove_today(n_clicks_list, ids, plan_id):
+    State("current-plan-id", "data"),
+    State("guitar-type-select", "value"), prevent_initial_call=True)
+def handle_remove_today(n_clicks_list, ids, plan_id, guitar_type):
     if not ctx.triggered_id or not any(n for n in n_clicks_list if n) or not plan_id: return dash.no_update, dash.no_update
     remove_today_entry(plan_id, ctx.triggered_id["exercise"])
-    return _build_today_card(plan_id), _build_category_grids(plan_id)
+    return _build_today_card(plan_id), _build_category_grids(plan_id, guitar_type or "all")
 
 
 # --- Repertoire callbacks ---
@@ -2242,6 +2292,103 @@ app.clientside_callback(
     Input("yt-audio-only", "value"),
     prevent_initial_call=True
 )
+
+
+# ============================================================================
+# BACKING TRACK MANAGEMENT CALLBACKS
+# ============================================================================
+
+@callback(
+    Output("saved-tracks-dropdown", "options"),
+    Input("url", "pathname"),
+    Input("btn-save-track", "n_clicks"),
+    Input("btn-delete-track", "n_clicks"),
+    prevent_initial_call=False
+)
+def refresh_saved_tracks(pathname, save_clicks, delete_clicks):
+    """Refresh the saved tracks dropdown"""
+    tracks = get_all_backing_tracks()
+    return [{"label": t.title or t.url[:50], "value": t.id} for t in tracks]
+
+
+@callback(
+    Output("yt-url-input", "value"),
+    Output("yt-track-title", "value"),
+    Output("saved-tracks-dropdown", "value"),
+    Input("saved-tracks-dropdown", "value"),
+    prevent_initial_call=True
+)
+def load_saved_track(track_id):
+    """Load a saved track when selected from dropdown"""
+    if not track_id:
+        return dash.no_update, dash.no_update, dash.no_update
+    tracks = get_all_backing_tracks()
+    for t in tracks:
+        if t.id == track_id:
+            return t.url, t.title or "", track_id
+    return dash.no_update, dash.no_update, dash.no_update
+
+
+@callback(
+    Output("btn-delete-track", "disabled"),
+    Input("saved-tracks-dropdown", "value"),
+)
+def toggle_delete_button(track_id):
+    """Enable delete button when a track is selected"""
+    return not bool(track_id)
+
+
+@callback(
+    Output("saved-tracks-dropdown", "options", allow_duplicate=True),
+    Output("yt-track-title", "value", allow_duplicate=True),
+    Input("btn-save-track", "n_clicks"),
+    State("yt-url-input", "value"),
+    State("yt-track-title", "value"),
+    prevent_initial_call=True
+)
+def save_backing_track(n_clicks, url, title):
+    """Save current track to database"""
+    if not n_clicks or not url:
+        return dash.no_update, dash.no_update
+    
+    # Extract video ID
+    import re
+    video_id = None
+    patterns = [
+        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})',
+        r'^([a-zA-Z0-9_-]{11})$'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            video_id = match.group(1)
+            break
+    
+    add_backing_track(url=url, title=title or None, video_id=video_id)
+    
+    tracks = get_all_backing_tracks()
+    options = [{"label": t.title or t.url[:50], "value": t.id} for t in tracks]
+    return options, ""  # Clear title input after save
+
+
+@callback(
+    Output("saved-tracks-dropdown", "options", allow_duplicate=True),
+    Output("saved-tracks-dropdown", "value", allow_duplicate=True),
+    Input("btn-delete-track", "n_clicks"),
+    State("saved-tracks-dropdown", "value"),
+    prevent_initial_call=True
+)
+def delete_saved_track(n_clicks, track_id):
+    """Delete selected track"""
+    if not n_clicks or not track_id:
+        return dash.no_update, dash.no_update
+    
+    delete_backing_track(track_id)
+    
+    tracks = get_all_backing_tracks()
+    options = [{"label": t.title or t.url[:50], "value": t.id} for t in tracks]
+    return options, None  # Clear selection
+
 
 # Wake Lock API - keep screen awake during practice
 app.clientside_callback(

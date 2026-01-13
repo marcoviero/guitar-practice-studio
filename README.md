@@ -71,13 +71,14 @@ sudo apt install ffmpeg
 ## Features
 
 ### 📅 Planner Tab
+- **Guitar type filter** — Switch between Classical, Electric, and Steel String guitars
 - **Weekly grid** — Schedule exercises for each day of the week
 - **Week navigation** — Browse previous and future weeks
 - **Six practice categories** (customizable in `exercises.toml`):
   - Technique, Knowledge, Songs, Ear Training, Time/Rhythm, Improvisation
 - **Time targets** — Each category shows progress toward daily targets
-- **Visual feedback** — Categories turn green when targets are met
-- **Today's checklist** — Quick view of what to practice today
+- **Visual feedback** — Columns highlight when you've practiced that day
+- **Today's checklist** — Reorderable list of what to practice today
 
 ### 🎵 Repertoire Tab
 - **Track your pieces** — Songs, etudes, suites, riffs
@@ -87,6 +88,7 @@ sudo apt install ffmpeg
 
 ### 🎤 Practice Tab
 - **Countdown timer** — Set your practice duration and stay focused
+- **☕ Keep Awake** — Prevent laptop from sleeping during practice
 - **Recording** with device selection (camera + microphone)
 - **Recording types** — Label as Performance, Exercise, or Riff
 - **🥁 Drum Machine** — Built-in patterns for practicing with rhythm:
@@ -94,6 +96,7 @@ sudo apt install ffmpeg
   - Adjustable BPM (40-200) and volume
   - Visual beat indicator
 - **▶ YouTube Backing Tracks** — Paste any YouTube URL to play along:
+  - **Save tracks** — Build a library of your favorite backing tracks
   - Speed control (0.25x - 2x) for learning parts slowly
   - Loop toggle for continuous practice
   - Audio-only mode (hides video)
@@ -127,12 +130,26 @@ name = "Spider Exercise"
 category = "Technique"
 duration = 5
 description = "Chromatic finger independence exercise"
+
+# Exercises can be limited to specific guitar types
+[[exercises]]
+name = "Bend in Tune"
+category = "Technique"
+duration = 5
+guitars = ["electric", "steel"]  # Won't show for classical
+
+[[exercises]]
+name = "Rest Stroke Practice"
+category = "Technique"
+duration = 5
+guitars = ["classical"]  # Only shows for classical
 ```
 
 Edit this file to:
 - Add/remove/rename exercises
 - Change default durations
 - Adjust target minutes per category
+- Assign exercises to specific guitar types: `classical`, `electric`, `steel`, or `all` (default)
 
 ### Environment Variables
 

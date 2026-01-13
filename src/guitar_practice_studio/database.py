@@ -105,9 +105,17 @@ class Exercise(Base):
     default_duration_minutes = Column(Integer, default=5)
     is_active = Column(Boolean, default=True)  # Can hide exercises without deleting
     sort_order = Column(Integer, default=0)
+    guitars = Column(String(200), default="all")  # Comma-separated: "classical,electric,steel" or "all"
     
     # Relationships
     plan_entries = relationship("WeeklyPlanEntry", back_populates="exercise")
+    
+    def matches_guitar(self, guitar_type: str) -> bool:
+        """Check if this exercise applies to a guitar type"""
+        if not self.guitars or self.guitars == "all":
+            return True
+        guitar_list = [g.strip().lower() for g in self.guitars.split(",")]
+        return guitar_type.lower() in guitar_list or "all" in guitar_list
     
     def __repr__(self):
         return f"<Exercise {self.id}: {self.name} ({self.category})>"
@@ -202,6 +210,20 @@ class DailyJournal(Base):
         return f"<DailyJournal {self.date}>"
 
 
+class BackingTrack(Base):
+    """Saved YouTube backing tracks"""
+    __tablename__ = "backing_tracks"
+    
+    id = Column(Integer, primary_key=True)
+    url = Column(String(500), nullable=False)
+    title = Column(String(300))  # User-provided title
+    video_id = Column(String(20))  # YouTube video ID
+    created_at = Column(DateTime, default=datetime.now)
+    
+    def __repr__(self):
+        return f"<BackingTrack {self.id}: {self.title or self.url}>"
+
+
 # Database operations
 def init_db():
     """Create all tables and run migrations"""
@@ -259,6 +281,32 @@ def _run_migrations():
                 date_mastered DATE,
                 is_active BOOLEAN DEFAULT 1,
                 sort_order INTEGER DEFAULT 0
+            )
+        """)
+        conn.commit()
+        print("Migration complete.")
+    
+    # Check if guitars column exists in exercises
+    cursor.execute("PRAGMA table_info(exercises)")
+    columns = [col[1] for col in cursor.fetchall()]
+    
+    if columns and "guitars" not in columns:
+        print("Migration: Adding guitars column to exercises...")
+        cursor.execute("ALTER TABLE exercises ADD COLUMN guitars VARCHAR(200) DEFAULT 'all'")
+        conn.commit()
+        print("Migration complete.")
+    
+    # Check if backing_tracks table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='backing_tracks'")
+    if not cursor.fetchone():
+        print("Migration: Creating backing_tracks table...")
+        cursor.execute("""
+            CREATE TABLE backing_tracks (
+                id INTEGER PRIMARY KEY,
+                url VARCHAR(500) NOT NULL,
+                title VARCHAR(300),
+                video_id VARCHAR(20),
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
         conn.commit()
@@ -456,6 +504,12 @@ def init_default_exercises():
         category = ex["category"]
         duration = ex.get("duration", ex.get("default_duration_minutes", 5))
         description = ex.get("description", "")
+        # Handle guitars - can be a list or string
+        guitars_raw = ex.get("guitars", "all")
+        if isinstance(guitars_raw, list):
+            guitars = ",".join(guitars_raw)
+        else:
+            guitars = guitars_raw
         
         if name in existing:
             # Update existing exercise
@@ -463,11 +517,13 @@ def init_default_exercises():
             if (exercise.category != category or 
                 exercise.default_duration_minutes != duration or
                 exercise.description != description or
-                exercise.sort_order != i):
+                exercise.sort_order != i or
+                exercise.guitars != guitars):
                 exercise.category = category
                 exercise.default_duration_minutes = duration
                 exercise.description = description
                 exercise.sort_order = i
+                exercise.guitars = guitars
                 updated += 1
         else:
             # Add new exercise
@@ -476,7 +532,8 @@ def init_default_exercises():
                 category=category,
                 default_duration_minutes=duration,
                 description=description,
-                sort_order=i
+                sort_order=i,
+                guitars=guitars
             )
             db.add(exercise)
             added += 1
@@ -985,3 +1042,45 @@ def delete_manual_practice(entry_id: int):
         db.commit()
     db.close()
 
+
+# Backing Track functions
+def get_all_backing_tracks() -> List[BackingTrack]:
+    """Get all saved backing tracks"""
+    db = get_session()
+    tracks = db.query(BackingTrack).order_by(BackingTrack.created_at.desc()).all()
+    db.close()
+    return tracks
+
+
+def add_backing_track(url: str, title: str = None, video_id: str = None) -> int:
+    """Add a new backing track"""
+    db = get_session()
+    track = BackingTrack(url=url, title=title, video_id=video_id)
+    db.add(track)
+    db.commit()
+    track_id = track.id
+    db.close()
+    return track_id
+
+
+def delete_backing_track(track_id: int):
+    """Delete a backing track"""
+    db = get_session()
+    track = db.query(BackingTrack).get(track_id)
+    if track:
+        db.delete(track)
+        db.commit()
+    db.close()
+
+
+def get_exercises_for_guitar(guitar_type: str) -> List[Exercise]:
+    """Get all exercises that match a guitar type"""
+    db = get_session()
+    exercises = db.query(Exercise).filter(Exercise.is_active == True).order_by(
+        Exercise.category, Exercise.sort_order
+    ).all()
+    # Filter by guitar type
+    if guitar_type and guitar_type != "all":
+        exercises = [ex for ex in exercises if ex.matches_guitar(guitar_type)]
+    db.close()
+    return exercises

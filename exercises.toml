@@ -1,6 +1,9 @@
 # Guitar Practice Studio - Exercise Configuration
 # Edit this file to customize your practice exercises
 
+# Guitar types: classical, electric, steel, or "all" (default)
+# Exercises can belong to multiple guitar types: guitars = ["classical", "electric"]
+
 [categories]
 # Target minutes per category per day (for progress indicators)
 [categories.technique]
@@ -15,7 +18,7 @@ color = "#28a745"
 
 [categories.songs]
 name = "Songs"
-target_minutes = 20
+target_minutes = 30
 color = "#28a745"
 
 [categories.ear_training]
@@ -38,53 +41,68 @@ color = "#28a745"
 # EXERCISES BY CATEGORY
 # ============================================================================
 
+# --- Technique (all guitars unless specified) ---
+
 [[exercises]]
 name = "Chromatic Scale"
 category = "Technique"
 duration = 5
 description = "Full chromatic scale practice"
+guitars = ["classical"]
 
 [[exercises]]
 name = "Spider Exercise"
 category = "Technique"
 duration = 5
 description = "Chromatic finger independence exercise"
+guitars = ["classical, electric"]
 
 [[exercises]]
 name = "Finger Stretching"
 category = "Technique"
-duration = 3
+duration = 5
 description = "Warm-up stretches for fretting hand"
+
+[[exercises]]
+name = "Q Stregthening"
+category = "Technique"
+duration = 5
+description = "Strengthen pinkie (q) finger"
 
 [[exercises]]
 name = "Bend in Tune"
 category = "Technique"
 duration = 5
 description = "Bending to the correct note"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Vibrato"
 category = "Technique"
 duration = 5
 description = "Vibrato with intention"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Hammer-ons/Pull-offs"
 category = "Technique"
 duration = 5
 description = "Legato technique practice"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Picks & Flicks"
 category = "Technique"
 duration = 5
 description = "Mastering Tapping"
+guitars = ["electric"]
 
 [[exercises]]
 name = "One Minute Changes"
 category = "Technique"
 duration = 5
 description = "Timed chord transition drills"
+guitars = ["electric", "steel"]
 
 [[exercises]]
 name = "Scale in Three"
@@ -129,38 +147,51 @@ name = "Learning Blues Riffs"
 category = "Knowledge"
 duration = 10
 description = "Learning Blues Riffs"
+guitars = ["electric", "steel"]
 
 # --- Songs (practice types - actual songs come from Repertoire) ---
 
 [[exercises]]
 name = "Etudes"
 category = "Songs"
-duration = 10
+duration = 15
 description = "Exercise-focused songs"
+guitars = ["classical"]
+
+[[exercises]]
+name = "Repetoire"
+category = "Songs"
+duration = 15
+description = "Performance songs"
+guitars = ["classical"]
 
 [[exercises]]
 name = "Campfire"
 category = "Songs"
-duration = 10
+duration = 15
 description = "Easy crowd-pleasings songs"
+guitars = ["electric","steel"]
 
 [[exercises]]
 name = "Developers"
 category = "Songs"
-duration = 10
+duration = 15
 description = "Challenging songs"
+guitars = ["electric","steel"]
 
 [[exercises]]
 name = "Dreamers"
 category = "Songs"
-duration = 10
+duration = 15
 description = "Aspirational songs"
+guitars = ["electric","steel"]
 
 [[exercises]]
 name = "Songwriting"
 category = "Songs"
 duration = 20
 description = "Work on your own song"
+guitars = ["electric","steel"]
 
 # --- Ear Training ---
 
@@ -175,24 +206,28 @@ name = "Chord Recognition"
 category = "Ear Training"
 duration = 5
 description = "Identify chord types and qualities"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Chord Progression"
 category = "Ear Training"
 duration = 5
 description = "Recognize cord progressions"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Melody Picking"
 category = "Ear Training"
 duration = 5
 description = "Figure out melodies by ear"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Transcribe Solos"
 category = "Ear Training"
-duration = 15
+duration = 20
 description = "Learn a solo by ear"
+guitars = ["electric", "steel"]
 
 # --- Time/Rythm ---
 
@@ -207,11 +242,12 @@ name = "Strumming Patterns"
 category = "Time/Rythm"
 duration = 5
 description = "Rythm practice for existing songs"
+guitars = ["steel", "electric"]
 
 [[exercises]]
 name = "Rhythm Clapping"
 category = "Time/Rythm"
-duration = 3
+duration = 5
 description = "Rhythm dictation and reproduction"
 
 # --- Improvisation ---
@@ -221,15 +257,18 @@ name = "Targeting Apreggios"
 category = "Improvisation"
 duration = 10
 description = "Figure out chord progressions"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Applying Blues Riffs"
 category = "Improvisation"
 duration = 10
 description = "Practicing Blues Riffs"
+guitars = ["electric"]
 
 [[exercises]]
 name = "Minor/Major Pentatonic Improvisation"
 category = "Improvisation"
 duration = 10
 description = "Connect pentatonics on fretboard"
+guitars = ["electric"]
