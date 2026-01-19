@@ -159,7 +159,7 @@ description = "Exercise-focused songs"
 guitars = ["classical"]
 
 [[exercises]]
-name = "Repetoire"
+name = "Repertoire"
 category = "Songs"
 duration = 15
 description = "Performance songs"
