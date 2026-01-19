@@ -626,7 +626,7 @@ def create_record_page():
                     dbc.CardBody([
                         dbc.Row([dbc.Col([html.Div([
                             dbc.Button("−", id="btn-timer-minus", color="secondary", outline=True, size="sm", className="me-2"),
-                            dbc.Input(id="timer-duration-input", type="number", value=today_exercises[0]["duration"] if today_exercises and not today_exercises[0]["completed"] else 5, min=1, max=120, style={"width": "70px", "display": "inline-block", "textAlign": "center"}),
+                            dbc.Input(id="timer-duration-input", type="number", value=5, min=1, max=120, style={"width": "70px", "display": "inline-block", "textAlign": "center"}),
                             html.Span(" min", className="ms-1 me-2"),
                             dbc.Button("+", id="btn-timer-plus", color="secondary", outline=True, size="sm"),
                         ], className="d-flex align-items-center justify-content-center mb-3")])]),
@@ -1034,22 +1034,6 @@ def handle_plan_checkbox(values, ids, plan_id, guitar_type):
 def handle_today_complete(value, id_dict):
     toggle_entry_completed(id_dict["entry"], value)
     return value
-
-
-@callback(Output("timer-duration-input", "value", allow_duplicate=True),
-          Input({"type": "practice-complete", "entry": ALL}, "value"),
-          State("practice-plan-id", "data"), prevent_initial_call=True)
-def update_timer_from_checklist(checkbox_values, plan_id):
-    """Update timer to next uncompleted exercise duration when checklist changes"""
-    if not plan_id:
-        return dash.no_update
-
-    today_exercises = get_today_exercises(plan_id)
-    for ex in today_exercises:
-        if not ex["completed"]:
-            return ex["duration"]
-
-    return dash.no_update
 
 
 @callback(Output("today-card-container", "children", allow_duplicate=True),

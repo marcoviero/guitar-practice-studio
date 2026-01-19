@@ -1,6 +1,6 @@
 [project]
 name = "guitar-practice-studio"
-version = "0.1.0"
+version = "1.0.0"
 description = "A practice recording, journaling, and review tool for guitarists"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -20,6 +20,7 @@ dependencies = [
     "opencv-python>=4.8.0",  # For camera detection
     "sqlalchemy>=2.0.0",
     "python-dateutil>=2.8.0",
+    "pywebview>=5.0.0",  # For native desktop window
 ]
 
 [project.optional-dependencies]
@@ -30,6 +31,7 @@ dev = [
 
 [project.scripts]
 guitar-practice = "guitar_practice_studio.app:main"
+guitar-practice-desktop = "guitar_practice_studio.desktop:main"
 
 [build-system]
 requires = ["hatchling"]

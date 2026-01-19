@@ -46,11 +46,24 @@ cd guitar-practice-studio
 # Install dependencies (this may take a minute the first time)
 uv sync
 
-# Run the app
+# Run the app (browser mode)
 uv run guitar-practice
 ```
 
 Then open **http://127.0.0.1:8050** in your browser.
+
+### Step 2b (Alternative): Run as Desktop App
+
+For a native desktop window (no browser needed):
+
+```bash
+uv run guitar-practice-desktop
+```
+
+This opens a standalone window with the app. Benefits:
+- No browser URL bar
+- Dedicated window in your dock/taskbar
+- Cleaner look and feel
 
 ### Step 3 (Optional): Install ffmpeg for Video Recording
 
