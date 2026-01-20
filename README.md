@@ -1,265 +1,121 @@
 # 🎸 Guitar Practice Studio
 
-A practice planning, recording, and review tool inspired by the teaching philosophies of **Justin Sandercoe** (structured practice routines) and **Molly Gebrian** (*Learn Faster, Perform Better* — the importance of recording yourself).
+A desktop app for guitarists to plan weekly practice routines and easily record themselves.
 
-## Core Philosophy
+**Key features:**
+- **Weekly Planner** — Schedule exercises across categories (technique, repertoire, theory, etc.) with time targets
+- **Easy Recording** — One-click audio recording with waveform visualization; video recording available with ffmpeg
+- **Practice Timer** — Countdown timer that auto-advances through your daily checklist
+- **Backing Tracks** — Built-in drum machine and YouTube player with speed control
+- **Journal** — Track your progress with a week-at-a-glance view
+- **Guitar Filtering** — Separate exercises for classical, electric, and steel string
 
-> "You cannot hear yourself accurately while you're playing. Your brain is too busy executing motor commands to objectively evaluate the sound." — Molly Gebrian
+## Download & Install
 
-This app helps you:
-1. **Plan** your weekly practice with a structured routine
-2. **Track** your repertoire (songs, etudes, suites)
-3. **Record** practice sessions (audio + video)
-4. **Review** recordings with time-stamped annotations
-5. **Journal** and reflect on progress
+1. Download `Guitar Practice Studio.app` (or the .dmg)
+2. Drag to your Applications folder
+3. Double-click to run
 
-## Installation
+That's it — no Python, no terminal, no dependencies needed.
 
-### Step 1: Install uv (Package Manager)
+### Video Recording (Optional)
 
-**uv** is a fast Python package manager that makes installation simple.
+Video recording requires [ffmpeg](https://ffmpeg.org). Without it, audio recording works fine.
 
-**macOS/Linux:**
-```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-**Windows (PowerShell):**
-```powershell
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-After installation, restart your terminal (or open a new one).
-
-To verify it worked, type:
-```bash
-uv --version
-```
-You should see something like `uv 0.5.x`.
-
-### Step 2: Install Guitar Practice Studio
-
-```bash
-# Unzip the project and navigate into it
-cd guitar-practice-studio
-
-# Install dependencies (this may take a minute the first time)
-uv sync
-
-# Run the app (browser mode)
-uv run guitar-practice
-```
-
-Then open **http://127.0.0.1:8050** in your browser.
-
-### Step 2b (Alternative): Run as Desktop App
-
-For a native desktop window (no browser needed):
-
-```bash
-uv run guitar-practice-desktop
-```
-
-This opens a standalone window with the app. Benefits:
-- No browser URL bar
-- Dedicated window in your dock/taskbar
-- Cleaner look and feel
-
-### Step 2c (Advanced): Tauri Build
-
-For a smaller, more native desktop build using Tauri (Rust-based), see `src-tauri/README.md`. This requires the Rust toolchain but produces smaller binaries suitable for distribution.
-
-### Step 3 (Optional): Install ffmpeg for Video Recording
-
-ffmpeg is needed for video recording (combining audio + video). Audio-only recording works without it.
-
-**macOS:**
+To enable video recording on macOS:
 ```bash
 brew install ffmpeg
 ```
 
-**Ubuntu/Debian:**
-```bash
-sudo apt install ffmpeg
-```
+The app will automatically detect ffmpeg and enable video recording.
 
-**Windows:** Download from [ffmpeg.org](https://ffmpeg.org/download.html) and add to PATH.
+## Building from Source
 
-## Features
+If you want to modify the app or build it yourself:
 
-### 📅 Planner Tab
-- **Guitar type filter** — Switch between Classical, Electric, and Steel String guitars
-- **Weekly grid** — Schedule exercises for each day of the week
-- **Week navigation** — Browse previous and future weeks
-- **Six practice categories** (customizable in `exercises.toml`):
-  - Technique, Knowledge, Songs, Ear Training, Time/Rhythm, Improvisation
-- **Time targets** — Each category shows progress toward daily targets
-- **Visual feedback** — Columns highlight when you've practiced that day
-- **Today's checklist** — Reorderable list of what to practice today
+### Prerequisites
 
-### 🎵 Repertoire Tab
-- **Track your pieces** — Songs, etudes, suites, riffs
-- **Status workflow**: Want to Learn → Learning → Review → Mastered
-- **Metadata** — Artist, genre, difficulty (1-5 stars), notes, links
-- **Quick actions** — Advance status, edit, delete
+- [uv](https://docs.astral.sh/uv/getting-started/installation/) — Python package manager
+- macOS with Xcode Command Line Tools
 
-### 🎤 Practice Tab
-- **Countdown timer** — Set your practice duration and stay focused
-- **☕ Keep Awake** — Prevent laptop from sleeping during practice
-- **Recording** with device selection (camera + microphone)
-- **Recording types** — Label as Performance, Exercise, or Riff
-- **🥁 Drum Machine** — Built-in patterns for practicing with rhythm:
-  - Rock, Pop, Blues Shuffle, Funk, Jazz Swing, Bossa Nova, Metronome
-  - Adjustable BPM (40-200) and volume
-  - Visual beat indicator
-- **▶ YouTube Backing Tracks** — Paste any YouTube URL to play along:
-  - **Save tracks** — Build a library of your favorite backing tracks
-  - Speed control (0.25x - 2x) for learning parts slowly
-  - Loop toggle for continuous practice
-  - Audio-only mode (hides video)
-  - Sync with drum machine
-- **Today's Practice sidebar** — Quick checklist from your plan
-
-### 📔 Journal Tab
-- **Week-at-a-glance** — Navigate weeks with visual daily summaries
-- **Daily details** — All recordings and notes for the selected day
-- **Editable notes** — Add reflections for any day
-
-### 🔍 Review Tab
-- **Playback recordings** with waveform visualization
-- **Loop sections** for focused review
-- **Filter by type** — Performance, Exercise, Riff
-- **Speed control** (0.5x - 2x)
-
-## Configuration
-
-### exercises.toml
-
-All exercises and category targets are defined in `exercises.toml`. **Changes sync automatically on restart** — no need to delete the database.
-
-```toml
-[categories.technique]
-name = "Technique"
-target_minutes = 15
-
-[[exercises]]
-name = "Spider Exercise"
-category = "Technique"
-duration = 5
-description = "Chromatic finger independence exercise"
-
-# Exercises can be limited to specific guitar types
-[[exercises]]
-name = "Bend in Tune"
-category = "Technique"
-duration = 5
-guitars = ["electric", "steel"]  # Won't show for classical
-
-[[exercises]]
-name = "Rest Stroke Practice"
-category = "Technique"
-duration = 5
-guitars = ["classical"]  # Only shows for classical
-```
-
-Edit this file to:
-- Add/remove/rename exercises
-- Change default durations
-- Adjust target minutes per category
-- Assign exercises to specific guitar types: `classical`, `electric`, `steel`, or `all` (default)
-
-### Environment Variables
-
-- `GPS_DEBUG` — Enable debug mode (`true`/`false`, default: `false`)
-- `GPS_HOST` — Server host (default: `127.0.0.1`)
-- `GPS_PORT` — Server port (default: `8050`)
-
-## Data Storage
-
-All user data is stored in `~/.guitar-practice-studio/`:
-- `practice.db` — SQLite database (sessions, plans, repertoire)
-- `recordings/` — Audio and video files
-
-## Troubleshooting
-
-### No cameras/microphones detected
-
-**macOS:** Grant permissions in System Settings > Privacy & Security > Camera/Microphone
-
-List available devices:
-```bash
-ffmpeg -f avfoundation -list_devices true -i ""
-```
-
-### Recording fails
-
-1. Check terminal output for errors
-2. Try audio-only recording first (uncheck camera)
-3. Ensure no other app is using the camera
-4. Click "Refresh" in the Recording Devices section
-
-### Database reset
-
-To completely reset (clears all data):
-```bash
-rm ~/.guitar-practice-studio/practice.db
-```
-
-### uv not found after installation
-
-- **macOS/Linux:** Run `source ~/.bashrc` or `source ~/.zshrc`, or restart terminal
-- **Windows:** Close and reopen PowerShell
-
-## Tips for Effective Practice
-
-1. **Plan your week** — Use the Planner to schedule balanced practice
-2. **Use the drum machine** — Practicing with rhythm improves timing
-3. **Record yourself** — Even audio-only reveals things you miss while playing
-4. **Slow it down** — Use YouTube speed control to learn difficult parts
-5. **Review with purpose** — Use annotations to mark specific issues
-6. **Be consistent** — Short daily sessions beat long sporadic ones
-
-## Building a Standalone App
-
-To create a double-click `.app` that doesn't require Python or terminal:
+### Run in Development Mode
 
 ```bash
-# Install dev dependencies (includes PyInstaller)
+# Clone or download the source
+cd guitar-practice-studio
+
+# Install dependencies
+uv sync
+
+# Run in browser mode
+uv run guitar-practice
+
+# Or run in desktop window mode
+uv run guitar-practice-desktop
+```
+
+Then open http://127.0.0.1:8050 in your browser (for browser mode).
+
+### Build the Standalone App
+
+```bash
+# Install dev dependencies
 uv sync --extra dev
 
-# Build the app
+# Build
 ./build_app.sh
 ```
 
-The app will be created at `dist/Guitar Practice Studio.app`. You can:
-- Double-click to run
-- Drag to Applications folder
-- Share with others as a zip or DMG
+The app will be created at `dist/Guitar Practice Studio.app`.
 
-To create a DMG for distribution:
+To create a distributable DMG:
 ```bash
 hdiutil create -volname "Guitar Practice Studio" -srcfolder "dist/Guitar Practice Studio.app" -ov -format UDZO GuitarPracticeStudio.dmg
 ```
+
+## Data Storage
+
+All your data is stored locally in `~/.guitar-practice-studio/`:
+- `practice.db` — Database (plans, recordings, journal entries)
+- `recordings/` — Audio and video files
+
+To reset completely, delete this folder.
 
 ## Project Structure
 
 ```
 guitar-practice-studio/
 ├── pyproject.toml              # Dependencies & project config
-├── exercises.toml              # Exercise definitions & category targets
-├── guitar_practice_studio.spec # PyInstaller build spec
-├── build_app.sh                # Build script for standalone app
-├── README.md
-└── src/
-    └── guitar_practice_studio/
-        ├── app.py              # Main Dash application & UI
-        ├── desktop.py          # pywebview desktop wrapper
-        ├── config.py           # Settings (audio/video params)
-        ├── database.py         # SQLite models & queries
-        ├── recorder.py         # Audio/video capture
-        └── audio_utils.py      # Waveform generation
+├── exercises.toml              # Exercise definitions (editable)
+├── guitar_practice_studio.spec # PyInstaller build config
+├── build_app.sh                # Build script
+└── src/guitar_practice_studio/
+    ├── app.py                  # Main UI
+    ├── desktop.py              # Desktop window wrapper
+    ├── database.py             # Data models
+    ├── recorder.py             # Audio/video capture
+    ├── config.py               # Settings
+    └── audio_utils.py          # Waveform generation
 ```
+
+## Customizing Exercises
+
+Edit `exercises.toml` to add your own exercises:
+
+```toml
+[[exercises]]
+name = "My Custom Exercise"
+category = "Technique"
+default_duration = 10
+guitars = ["classical", "electric"]  # or "all"
+```
+
+For the standalone app, place your custom `exercises.toml` in `~/.guitar-practice-studio/`.
 
 ## License
 
-MIT — Use freely, practice often! 🎶
+Free for personal use. Share freely, but please don't sell or repackage.
+
+If you find this useful, donations are appreciated (Venmo @Marco-Viero)! 🎶
+
+See [LICENSE](LICENSE) for full terms.
