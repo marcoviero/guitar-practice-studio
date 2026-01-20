@@ -438,7 +438,14 @@ CATEGORY_TARGETS = {
 def load_exercises_config():
     """Load exercises and category config from TOML file"""
     import tomllib
+    import os
     from pathlib import Path
+    
+    # Check for PyInstaller bundled path first
+    bundled_path = os.environ.get('GPS_EXERCISES_PATH')
+    if bundled_path and Path(bundled_path).exists():
+        with open(bundled_path, "rb") as f:
+            return tomllib.load(f)
     
     # Look for exercises.toml in several locations
     possible_paths = [

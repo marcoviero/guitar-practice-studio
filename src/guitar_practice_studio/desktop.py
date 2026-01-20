@@ -3,10 +3,34 @@ Desktop wrapper for Guitar Practice Studio using pywebview.
 Runs the Dash app in a native window instead of a browser.
 """
 
+import os
+import sys
 import threading
+import time
+
+# Handle PyInstaller bundled app
+def get_resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller"""
+    if hasattr(sys, '_MEIPASS'):
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.abspath("."), relative_path)
+
+# Set exercises.toml path before importing app
+if hasattr(sys, '_MEIPASS'):
+    os.environ['GPS_EXERCISES_PATH'] = get_resource_path('exercises.toml')
+
+# Handle imports for both module and PyInstaller contexts
+try:
+    # When running as a module (uv run guitar-practice-desktop)
+    from .app import app, init_db, init_default_exercises, recorder
+    from .config import HOST, PORT, DEBUG, RECORDINGS_DIR
+except ImportError:
+    # When running as PyInstaller bundle
+    from guitar_practice_studio.app import app, init_db, init_default_exercises, recorder
+    from guitar_practice_studio.config import HOST, PORT, DEBUG, RECORDINGS_DIR
+
 import webview
-from .app import app, init_db, init_default_exercises, recorder
-from .config import HOST, PORT, DEBUG, RECORDINGS_DIR
 
 # Flag to track if server is ready
 server_ready = threading.Event()
@@ -40,6 +64,9 @@ def main():
     print("🎸 Guitar Practice Studio (Desktop)")
     print(f"   Data directory: {RECORDINGS_DIR.parent}")
     
+    if hasattr(sys, '_MEIPASS'):
+        print(f"   Running from bundle: {sys._MEIPASS}")
+    
     # Initialize database
     init_db()
     init_default_exercises()
@@ -60,7 +87,6 @@ def main():
     server_thread.start()
     
     # Give server a moment to start
-    import time
     time.sleep(1)
     
     print(f"   Server running at http://{HOST}:{PORT}")

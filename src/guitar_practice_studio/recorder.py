@@ -36,7 +36,27 @@ from .config import (
     VIDEO_FPS, VIDEO_RESOLUTION, DEFAULT_CAMERA_INDEX
 )
 
-FFMPEG_AVAILABLE = shutil.which("ffmpeg") is not None
+def _find_ffmpeg():
+    """Find ffmpeg, checking common macOS paths"""
+    # First check PATH
+    ffmpeg = shutil.which("ffmpeg")
+    if ffmpeg:
+        return ffmpeg
+    
+    # Check common macOS install locations
+    common_paths = [
+        "/opt/homebrew/bin/ffmpeg",  # Apple Silicon Homebrew
+        "/usr/local/bin/ffmpeg",      # Intel Homebrew
+        "/usr/bin/ffmpeg",            # System
+    ]
+    for path in common_paths:
+        if os.path.isfile(path) and os.access(path, os.X_OK):
+            return path
+    
+    return None
+
+FFMPEG_PATH = _find_ffmpeg()
+FFMPEG_AVAILABLE = FFMPEG_PATH is not None
 
 
 class Recorder:
@@ -81,7 +101,7 @@ class Recorder:
         if platform.system() == "Darwin" and FFMPEG_AVAILABLE:
             try:
                 result = subprocess.run(
-                    ["ffmpeg", "-f", "avfoundation", "-list_devices", "true", "-i", ""],
+                    [FFMPEG_PATH, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
                     capture_output=True, text=True, timeout=5
                 )
                 lines = result.stderr.split('\n')
@@ -254,7 +274,7 @@ class Recorder:
                 video_delay = -diff
                 print(f"Sync: video started {-diff*1000:.0f}ms late, delaying video")
         
-        cmd = ["ffmpeg", "-y"]
+        cmd = [FFMPEG_PATH, "-y"]
         
         # Video input (with delay if needed)
         if video_delay > 0:

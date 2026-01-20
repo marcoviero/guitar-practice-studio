@@ -65,6 +65,10 @@ This opens a standalone window with the app. Benefits:
 - Dedicated window in your dock/taskbar
 - Cleaner look and feel
 
+### Step 2c (Advanced): Tauri Build
+
+For a smaller, more native desktop build using Tauri (Rust-based), see `src-tauri/README.md`. This requires the Rust toolchain but produces smaller binaries suitable for distribution.
+
 ### Step 3 (Optional): Install ffmpeg for Video Recording
 
 ffmpeg is needed for video recording (combining audio + video). Audio-only recording works without it.
@@ -215,20 +219,45 @@ rm ~/.guitar-practice-studio/practice.db
 5. **Review with purpose** — Use annotations to mark specific issues
 6. **Be consistent** — Short daily sessions beat long sporadic ones
 
+## Building a Standalone App
+
+To create a double-click `.app` that doesn't require Python or terminal:
+
+```bash
+# Install dev dependencies (includes PyInstaller)
+uv sync --extra dev
+
+# Build the app
+./build_app.sh
+```
+
+The app will be created at `dist/Guitar Practice Studio.app`. You can:
+- Double-click to run
+- Drag to Applications folder
+- Share with others as a zip or DMG
+
+To create a DMG for distribution:
+```bash
+hdiutil create -volname "Guitar Practice Studio" -srcfolder "dist/Guitar Practice Studio.app" -ov -format UDZO GuitarPracticeStudio.dmg
+```
+
 ## Project Structure
 
 ```
 guitar-practice-studio/
-├── pyproject.toml          # Dependencies & project config
-├── exercises.toml          # Exercise definitions & category targets
+├── pyproject.toml              # Dependencies & project config
+├── exercises.toml              # Exercise definitions & category targets
+├── guitar_practice_studio.spec # PyInstaller build spec
+├── build_app.sh                # Build script for standalone app
 ├── README.md
 └── src/
     └── guitar_practice_studio/
-        ├── app.py          # Main Dash application & UI
-        ├── config.py       # Settings (audio/video params)
-        ├── database.py     # SQLite models & queries
-        ├── recorder.py     # Audio/video capture
-        └── audio_utils.py  # Waveform generation
+        ├── app.py              # Main Dash application & UI
+        ├── desktop.py          # pywebview desktop wrapper
+        ├── config.py           # Settings (audio/video params)
+        ├── database.py         # SQLite models & queries
+        ├── recorder.py         # Audio/video capture
+        └── audio_utils.py      # Waveform generation
 ```
 
 ## License
