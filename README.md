@@ -12,20 +12,34 @@ A desktop app for guitarists to plan weekly practice routines and easily record 
 
 ## Download & Install
 
-1. Download `Guitar Practice Studio.app` (or the .dmg)
-2. Drag to your Applications folder
+1. Download [`Guitar Practice Studio.dmg`](https://github.com/marcoviero/guitar-practice-studio/releases/tag/v1.0.0)
+2. Double-click and drag `app` to your Applications folder
 3. Double-click to run
 
-That's it — no Python, no terminal, no dependencies needed.
+### Opening Terminal (for optional steps below)
+
+To open Terminal on macOS: Press **Cmd + Space**, type **Terminal**, press Enter.
+
+Or: **Finder** → **Applications** → **Utilities** → **Terminal**
 
 ### Video Recording (Optional)
 
-Video recording requires [ffmpeg](https://ffmpeg.org). Without it, audio recording works fine.
+Video recording requires [ffmpeg](https://ffmpeg.org). Without it, audio recording still works perfectly.
 
-To enable video recording on macOS:
+**Option A: Using Homebrew** (if you have it)
 ```bash
 brew install ffmpeg
 ```
+
+**Option B: Manual download** (no Homebrew needed)
+1. Go to https://evermeet.cx/ffmpeg/
+2. Download **ffmpeg-7.1.1.zip** (or latest version)
+3. Unzip it (double-click the downloaded file)
+4. Open Terminal and run:
+```bash
+   sudo mv ~/Downloads/ffmpeg /usr/local/bin/
+```
+5. Enter your Mac password when prompted
 
 The app will automatically detect ffmpeg and enable video recording.
 
