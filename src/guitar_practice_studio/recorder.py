@@ -59,6 +59,45 @@ FFMPEG_PATH = _find_ffmpeg()
 FFMPEG_AVAILABLE = FFMPEG_PATH is not None
 
 
+def _get_camera_names_macos(expected_count: int) -> list[str] | None:
+    """Return camera names sorted to match OpenCV's AVCaptureDeviceDiscoverySession order.
+
+    OpenCV 4.9+ on macOS 14+ enumerates by device type in this order:
+      External/ExternalUnknown → ContinuityCamera → BuiltInWideAngle
+    The legacy devicesWithMediaType_ returns them built-in-first, so we re-sort
+    by deviceType() to match what OpenCV actually opens at each index.
+    """
+    if platform.system() != "Darwin":
+        return None
+    try:
+        import objc
+        from ctypes import cdll
+        cdll.LoadLibrary(
+            "/System/Library/Frameworks/AVFoundation.framework/AVFoundation"
+        )
+        AVCaptureDevice = objc.lookUpClass("AVCaptureDevice")
+        devs = list(AVCaptureDevice.devicesWithMediaType_("vide"))
+        devs += list(AVCaptureDevice.devicesWithMediaType_("muxx"))
+
+        TYPE_ORDER = {
+            "AVCaptureDeviceTypeExternalUnknown": 0,
+            "AVCaptureDeviceTypeExternal":        0,
+            "AVCaptureDeviceTypeContinuityCamera": 1,
+            "AVCaptureDeviceTypeBuiltInWideAngleCamera": 2,
+        }
+        tagged = [(str(d.localizedName()), str(d.deviceType())) for d in devs]
+        tagged.sort(key=lambda x: TYPE_ORDER.get(x[1], 5))
+        names = [name for name, _ in tagged]
+        print(f"  Camera names (sorted): {names}")
+        if len(names) == expected_count:
+            return names
+        print(f"  Count mismatch: {len(names)} names vs {expected_count} cameras found by OpenCV")
+        return None
+    except Exception as e:
+        print(f"Camera name lookup failed: {e}")
+        return None
+
+
 class Recorder:
     """
     Records audio via sounddevice and video via OpenCV,
@@ -94,57 +133,38 @@ class Recorder:
         return datetime.now().strftime("%Y%m%d_%H%M%S")
     
     def get_available_cameras(self) -> list:
-        """List cameras - use ffmpeg on macOS for proper names"""
+        """List cameras by probing OpenCV directly (correct indices) then
+        enriching with names from AVCaptureDeviceDiscoverySession (same API
+        OpenCV uses, so positions align)."""
         cameras = []
-        
-        # On macOS, use ffmpeg to get proper device names
-        if platform.system() == "Darwin" and FFMPEG_AVAILABLE:
-            try:
-                result = subprocess.run(
-                    [FFMPEG_PATH, "-f", "avfoundation", "-list_devices", "true", "-i", ""],
-                    capture_output=True, text=True, timeout=5
-                )
-                lines = result.stderr.split('\n')
-                in_video = False
-                for line in lines:
-                    if "AVFoundation video devices:" in line:
-                        in_video = True
-                        continue
-                    if "AVFoundation audio devices:" in line:
-                        break
-                    # Look for lines containing device indices like [0], [1], etc
-                    if in_video:
-                        # Match pattern: [AVFoundation ...] [0] Device Name
-                        match = re.search(r'\]\s*\[(\d+)\]\s*(.+)$', line)
-                        if match:
-                            idx = int(match.group(1))
-                            name = match.group(2).strip()
-                            cameras.append({"index": idx, "name": name})
-                            print(f"  Found camera [{idx}]: {name}")
-            except Exception as e:
-                print(f"Error listing cameras: {e}")
-        
-        # Fallback to OpenCV (less descriptive names)
-        if not cameras and VIDEO_AVAILABLE:
-            print("  Using OpenCV fallback for camera detection")
-            consecutive_failures = 0
-            for i in range(10):
-                if consecutive_failures >= 3:
-                    break
-                try:
-                    cap = cv2.VideoCapture(i)
-                    if cap.isOpened():
-                        w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-                        h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-                        cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
-                        cap.release()
-                        consecutive_failures = 0
-                    else:
-                        consecutive_failures += 1
-                        cap.release()
-                except Exception:
-                    consecutive_failures += 1
-        
+        if not VIDEO_AVAILABLE:
+            return cameras
+
+        backend = cv2.CAP_AVFOUNDATION if platform.system() == "Darwin" else cv2.CAP_ANY
+        consecutive_failures = 0
+        for i in range(10):
+            if consecutive_failures >= 3:
+                break
+            cap = cv2.VideoCapture(i, backend)
+            if cap.isOpened():
+                w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+                h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+                cameras.append({"index": i, "name": f"Camera {i} ({w}x{h})"})
+                cap.release()
+                consecutive_failures = 0
+            else:
+                cap.release()
+                consecutive_failures += 1
+
+        # Enrich with real names — only apply when count matches to avoid
+        # silently assigning the wrong name if the ordering drifts.
+        av_names = _get_camera_names_macos(len(cameras))
+        if av_names and len(av_names) == len(cameras):
+            for cam, name in zip(cameras, av_names):
+                cam["name"] = name
+
+        for cam in cameras:
+            print(f"  Found camera [{cam['index']}]: {cam['name']}")
         return cameras
     
     def get_available_audio_devices(self) -> list:
