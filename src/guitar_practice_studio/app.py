@@ -2466,6 +2466,20 @@ app.clientside_callback(
 # MAIN ENTRY POINT
 # ============================================================================
 
+def _get_lan_ip():
+    """Best-effort detection of this machine's LAN IP address."""
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        # Doesn't actually send packets; just picks the outbound interface.
+        s.connect(("8.8.8.8", 80))
+        return s.getsockname()[0]
+    except Exception:
+        return None
+    finally:
+        s.close()
+
+
 def main():
     print("🎸 Guitar Practice Studio")
     print(f"   Audio available: {AUDIO_AVAILABLE}")
@@ -2478,7 +2492,13 @@ def main():
     for c in cameras: print(f"      [{c['index']}] {c['name']}")
     print(f"   Audio inputs: {len(audio_devs)}")
     for a in audio_devs: print(f"      [{a['index']}] {a['name']}")
-    print(f"   Starting server at http://{HOST}:{PORT}")
+    print(f"   Local:   http://127.0.0.1:{PORT}")
+    if HOST == "0.0.0.0":
+        lan_ip = _get_lan_ip()
+        if lan_ip:
+            print(f"   Network: http://{lan_ip}:{PORT}  (open this on your iPad/phone on the same Wi-Fi)")
+        else:
+            print("   Network: enabled, but could not detect a LAN IP (are you connected to Wi-Fi?)")
     app.run(debug=DEBUG, host=HOST, port=PORT)
 
 

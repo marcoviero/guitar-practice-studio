@@ -39,5 +39,5 @@ PRACTICE_CATEGORIES = [
 
 # Dash app settings
 DEBUG = os.environ.get("GPS_DEBUG", "false").lower() == "true"
-HOST = os.environ.get("GPS_HOST", "127.0.0.1")
+HOST = os.environ.get("GPS_HOST", "0.0.0.0")  # Bind to all interfaces so other devices (e.g. iPad over Wi-Fi) can connect
 PORT = int(os.environ.get("GPS_PORT", "8050"))
